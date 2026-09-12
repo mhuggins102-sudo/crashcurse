@@ -35,12 +35,26 @@ The page uses ES modules, so open it through a server rather than `file://`.
 
 ## Deploying to Cloudflare Pages
 
-1. Push this repo to GitHub.
-2. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → pick the repo.
-3. Framework preset: **None**. Build command: leave **empty**. Build output directory: **`public`**.
-4. Save and deploy. Every push redeploys.
+Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** → pick this repo, then use exactly these values:
 
-Or from the CLI: `npx wrangler pages deploy public --project-name crashcurse`.
+| Setting | Value |
+| --- | --- |
+| Production branch | the branch that has the code (currently `claude/card-grid-puzzle-game-0wka0e`; it is the only branch, so it is also the repo default) |
+| Framework preset | `None` |
+| Build command | leave empty |
+| Build output directory | `public` |
+| Root directory | leave empty (`/`) |
+
+Save and deploy. Every push to the production branch redeploys.
+
+From the CLI instead: `npx wrangler pages deploy public --project-name crashcurse`.
+
+### Blank page? Check these in order
+
+1. **A completely blank page is Cloudflare's empty 404 response.** It means the build output directory has no `index.html` at its top level, almost always because it was left at `/` instead of `public`. Fix it under *Settings → Builds & deployments → Build output directory*, then *Retry deployment*. (As a safety net, the repo root also carries an `index.html` that forwards to `public/`, so a root output directory works from this commit onward, just with `/public/` in the URL.)
+2. **Wrong production branch.** If the project was created with `main` as the production branch, there is nothing to deploy because `main` does not exist yet. Either point the project at the branch above, or create `main` from it on GitHub and keep deploying `main`.
+3. **The build failed.** With no build command Cloudflare copies the files as they are; if a build command such as `npm run build` was entered, remove it (there is no build step). The *Deployments* tab shows the log.
+4. **Still blank with the correct directory?** Open `https://<your-site>.pages.dev/js/main.js` directly. A 404 there means the output directory is still wrong; if the file loads, open the browser console and send me the error.
 
 ## Playing
 
