@@ -428,3 +428,58 @@ export function findSatisfying(b, s, def, placedIdx) {
       return null;
   }
 }
+
+// ---------- precise, settings-aware explanations (popups and the rules page) ----------
+export const GOAL_DETAILS = {
+  pair: () => 'Two cards of the same rank sitting next to each other (up, down, left or right).',
+  twoPair: () => 'A chain of exactly 4 connected cards made of two pairs of different ranks, in any order along the chain (for example 9-4-9-4). Four cards of one rank do not count.',
+  threeKind: () => 'A chain of 3 connected cards that all share one rank.',
+  straight: (s) => `A chain of ${s.straightLen} connected cards whose ranks form a consecutive run${s.straightOrdered ? ', rising or falling step by step along the chain (5-6-7-8 or 8-7-6-5)' : ' in any order along the chain (6-4-7-5 counts)'}. The ace can be low (A-2-3…) or high (…Q-K-A), but the run cannot wrap around: K-A-2 does not count.`,
+  flush: (s) => `A chain of ${s.flushLen} connected cards that all share one suit. Ranks do not matter.`,
+  fullHouse: () => 'A chain of exactly 5 connected cards: three of one rank plus two of another, in any order along the chain.',
+  fourKind: () => 'A chain of 4 connected cards that all share one rank.',
+  straightFlush: (s) => `A straight of ${s.straightLen} connected cards (consecutive ranks${s.straightOrdered ? ', in order along the chain' : ', any order along the chain'}) whose cards also all share one suit.`,
+  royalFlush: () => 'The 10, J, Q, K and A of a single suit, connected in a chain of 5, in any order along the chain.',
+  blackjack: () => 'A chain of 2 to 5 connected cards whose pips total exactly 21. Number cards count face value, J/Q/K count 10, and an ace counts 1 or 11, whichever makes 21.',
+  fifteen: () => 'A chain of 2 to 4 connected cards whose pips total exactly 15. Number cards count face value, J/Q/K count 10, aces count 1.',
+  rainbow: () => 'A chain of 4 connected cards showing all four suits: one spade, one heart, one diamond and one club.',
+  sameColor: () => 'A chain of 5 connected cards of one color: all red (hearts and diamonds) or all black (spades and clubs).',
+  zebra: () => 'A chain of 4 connected cards whose colors alternate along the chain: red, black, red, black (or the reverse).',
+  court: () => 'A chain of 3 connected face cards: any mix of jacks, queens and kings.',
+  lowRoad: () => 'A chain of 4 connected cards each ranked 5 or lower: A, 2, 3, 4 or 5 (the ace counts as 1).',
+  highRoad: () => 'A chain of 4 connected cards each ranked 10 or higher: 10, J, Q, K or A.',
+  evens: () => 'A chain of 3 connected cards with even ranks: 2, 4, 6, 8, 10 or Q (the queen counts as 12).',
+  odds: () => 'A chain of 3 connected cards with odd ranks: A, 3, 5, 7, 9, J or K (ace 1, jack 11, king 13).',
+  suitedLine: () => 'Three cards of one suit side by side in a single row or a single column. No bends allowed.',
+  rankLadder: () => 'Three cards side by side in a single row or column whose ranks step by exactly one, in order (5-6-7 or 7-6-5). The ace can be low (A-2-3) or high (Q-K-A).',
+  fillRow: () => 'Every open cell of one row, from wall to wall, holds a card. A curse in the row blocks it.',
+  fillCol: () => 'Every open cell of one column, from wall to wall, holds a card. A curse in the column blocks it.',
+  lightRow: (s) => `A completely filled row (wall to wall) whose pips add up to at most ${s.lineLowAvg} × the row length, so the cards average ${s.lineLowAvg} pips or less. Number cards count face value, J/Q/K count 10, aces count 1.`,
+  heavyRow: (s) => `A completely filled row (wall to wall) whose pips add up to at least ${s.lineHighAvg} × the row length, so the cards average ${s.lineHighAvg} pips or more. Number cards count face value, J/Q/K count 10, aces count 1.`,
+  monoRow: () => 'A completely filled row (wall to wall) in which every card is the same color.',
+  checkerRow: () => 'A completely filled row (wall to wall) whose colors alternate from left to right: red, black, red, black (or the reverse).',
+  distinctRow: () => 'A completely filled row (wall to wall) in which no rank appears twice.',
+  suitedCol: () => 'A completely filled column (wall to wall) in which every card is the same suit.',
+  ladderCol: () => 'A completely filled column (wall to wall) whose ranks strictly rise or strictly fall from top to bottom, by any step size (2-5-6-K counts, 2-5-5-K does not).',
+};
+
+export function goalDetail(def, s) {
+  const f = GOAL_DETAILS[def.id];
+  return f ? f(s) : goalDesc(def, s);
+}
+
+// General notes that apply to a goal under the current settings.
+export function goalNotes(def, s) {
+  const notes = [];
+  if (def.shape === 'chain') {
+    notes.push(s.chainShape === 'group'
+      ? 'A chain here is any group of cards connected up/down/left/right; branching is fine.'
+      : 'A chain is a snake of cards connected up/down/left/right: it may bend, but it may not branch, and each card is used once.');
+  }
+  if (def.shape === 'line') notes.push('A straight line is one row or one column, no bends.');
+  if (def.shape === 'row' || def.shape === 'col' || def.shape === 'rowcol') {
+    notes.push(`Only the cells between the current walls count, and the line needs at least ${s.lineMinLen} open cell${s.lineMinLen === 1 ? '' : 's'}.`);
+  }
+  if (s.mustIncludePlaced) notes.push('The card you just placed must be part of it.');
+  return notes;
+}

@@ -2,7 +2,7 @@
 // panel from the schema, and runs the bot / simulation helpers.
 
 import { Game, OVER_REASONS } from './engine.js';
-import { SIDES, GOAL_DEFS, goalDesc, goalPoints } from './goals.js';
+import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled } from './goals.js';
 import { SUITS, RANK_LABELS } from './cards.js';
 import {
   SETTINGS_SCHEMA, SCHEMA_ITEMS, defaultSettings, loadSettings, saveSettings, normalizeSettings,
@@ -94,6 +94,7 @@ export class UI {
     this.cellSig = [];
     this.best = Number(localStorage.getItem(BEST_KEY) || 0) || 0;
     this.worker = null;
+    this.goalPopTimer = null;
     this.cacheEls();
     this.buildSettingsForm();
     this.bindGlobal();
@@ -151,6 +152,10 @@ export class UI {
       else if (act === 'settings') { this.hideOverlay(); this.openSettings(); }
       else if (act === 'close') this.hideOverlay();
     });
+    for (const side of SIDES) {
+      this.el.goal[side].addEventListener('click', (e) => { e.stopPropagation(); this.showGoalPopup(side); });
+    }
+    document.addEventListener('click', () => this.hideGoalPopup());
     document.addEventListener('keydown', (e) => this.onKey(e));
     window.addEventListener('resize', () => { if (this.game) { this.computeSize(); } });
     window.addEventListener('orientationchange', () => { if (this.game) { this.computeSize(); } });
@@ -174,6 +179,7 @@ export class UI {
     this.el.fx.innerHTML = '';
     this.el.pops.innerHTML = '';
     this.el.btnPause.textContent = 'Pause';
+    this.hideGoalPopup();
     this.buildGrid();
     this.buildHud();
     this.computeSize();
@@ -317,8 +323,39 @@ export class UI {
           `<div class="goal-desc">${esc(goalDesc(goal.def, s))}</div>` +
           `<div class="goal-meta"><span class="pts">${goalPoints(goal.def, s)} pts</span><span class="timer-text"></span></div>` +
           `<div class="goal-bar"><div class="goal-bar-fill"></div></div>`;
+        box.title = `${goal.def.name}: ${goalDetail(goal.def, s)} Tap for details.`;
       }
     }
+  }
+
+  // ---------- goal popup ----------
+  showGoalPopup(side) {
+    const g = this.game, s = this.settings;
+    const goal = g.goals[side];
+    this.hideGoalPopup();
+    if (!goal) return;
+    const t = s.clock === 'time';
+    const left = s.wallMode === 'goal'
+      ? (t ? `${Math.ceil(goal.timeLeft)}s left` : `${goal.timeLeft} turn${goal.timeLeft === 1 ? '' : 's'} left`)
+      : 'no timer';
+    const narrow = this.el.arena.getBoundingClientRect().width < 520;
+    const pop = h('div', { class: `goal-pop from-${side}${narrow ? ' centered' : ''}` });
+    pop.style.borderColor = `var(--${side})`;
+    pop.innerHTML =
+      `<div class="goal-pop-head"><span class="goal-pop-name" style="color: var(--${side})">${SIDE_ARROW[side]} ${esc(goal.def.name)}</span>` +
+      `<span class="goal-pop-meta">${goalPoints(goal.def, s)} pts · ${left}</span></div>` +
+      `<div class="goal-pop-body">${esc(goalDetail(goal.def, s))}</div>` +
+      `<ul class="goal-pop-notes">${goalNotes(goal.def, s).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` +
+      `<div class="goal-pop-hint">tap anywhere to dismiss</div>`;
+    pop.addEventListener('click', (e) => { e.stopPropagation(); this.hideGoalPopup(); });
+    this.el.arena.appendChild(pop);
+    this.goalPop = pop;
+    this.goalPopTimer = setTimeout(() => this.hideGoalPopup(), 7000);
+  }
+
+  hideGoalPopup() {
+    if (this.goalPopTimer) { clearTimeout(this.goalPopTimer); this.goalPopTimer = null; }
+    if (this.goalPop) { this.goalPop.remove(); this.goalPop = null; }
   }
 
   renderTimers() {
@@ -542,6 +579,7 @@ export class UI {
     if (e.target && e.target.matches('input, textarea, select')) return;
     const k = e.key;
     if (k === 'Escape') {
+      if (this.goalPop) { this.hideGoalPopup(); return; }
       if (!this.el.settings.hidden) this.closeSettings();
       else if (!this.el.help.hidden) this.el.help.hidden = true;
       else this.togglePause();
@@ -657,6 +695,17 @@ export class UI {
       `<li><kbd>←↑↓→</kbd> move a cursor, <kbd>Enter</kbd> or <kbd>Space</kbd> acts on it.</li>` +
       `<li><kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
       `</ul>` +
+      `<h3>Definitions</h3><ul>` +
+      `<li><b>Chain</b>: ${this.settings.chainShape === 'group' ? 'any group of cards connected up/down/left/right, branching allowed.' : 'a snake of cards connected up/down/left/right. It may bend as often as it likes but may not branch (a plus shape is not a chain), and each card is used once.'} Diagonals never connect.</li>` +
+      `<li><b>Straight line</b>: cards side by side in a single row or a single column, no bends.</li>` +
+      `<li><b>Full row / column</b>: every open cell between the current walls holds a card. Curses count as gaps. The line needs at least ${this.settings.lineMinLen} open cell${this.settings.lineMinLen === 1 ? '' : 's'}, and it gets shorter (easier) as the walls close in.</li>` +
+      `<li><b>Pips</b> (for sums): number cards count face value, J/Q/K count 10, aces count 1 (Blackjack also lets an ace be 11).</li>` +
+      `<li><b>Ace</b> in straights: low (A-2-3) or high (Q-K-A), never both (K-A-2 does not count). Ace is 1 for Low Road, Odds and pip sums, and counts as high for High Road.</li>` +
+      `<li>${this.settings.mustIncludePlaced ? 'The card you just placed must be part of the goal you complete.' : 'A goal clears after any placement if the board satisfies it.'} ${this.settings.clearedCardsRemoved ? 'Cleared cards leave the board.' : 'Cleared cards stay on the board.'}</li>` +
+      `</ul>` +
+      `<h3>Goal cards</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses.</p>` +
+      this.goalListHTML(this.settings) +
+      `<h3>Other cards</h3><dl class="goal-list"><dt>☠ Curse</dt><dd>Not a playing card. When drawn it lands on a random empty cell and blocks it: nothing can be placed there, chains cannot pass through it, and a row or column containing it cannot be completed. Remove it by spending a ward (earned by clearing goals) or let a wall crush it.</dd></dl>` +
       `<h3>Current rules</h3><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` +
       `<h3>Playtesting tips</h3><ul>` +
       `<li>Turn on <b>Hints</b> to see which cells would clear a goal; gold = one goal, red = two or more.</li>` +
@@ -664,6 +713,19 @@ export class UI {
       `<li>Set a <b>seed</b> in Settings to replay the same deck with different rules.</li>` +
       `</ul>`;
     this.el.help.hidden = false;
+  }
+
+  goalListHTML(s) {
+    let html = '';
+    for (const cat of [...new Set(GOAL_DEFS.map((d) => d.cat))]) {
+      html += `<h4>${esc(cat)}</h4><dl class="goal-list">`;
+      for (const d of GOAL_DEFS.filter((x) => x.cat === cat)) {
+        const on = goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && (typeof d.ordered === 'function' ? d.ordered(s) : !!d.ordered));
+        html += `<dt class="${on ? '' : 'off'}">${esc(d.name)} <span class="pts">${goalPoints(d, s)} pts</span>${on ? '' : ' <span class="offtag">off</span>'}</dt><dd class="${on ? '' : 'off'}">${esc(goalDetail(d, s))}</dd>`;
+      }
+      html += '</dl>';
+    }
+    return html;
   }
 
   rulesSummary(s) {

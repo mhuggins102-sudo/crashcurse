@@ -201,6 +201,36 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .arena.narrow .goal-name { font-size: 13px; }
 .arena.narrow .wall-left .goal-name, .arena.narrow .wall-right .goal-name { font-size: 11.5px; overflow-wrap: anywhere; }
 
+/* ---------- goal popup ---------- */
+.goal { cursor: pointer; }
+.goal-pop {
+  position: absolute; z-index: 6; width: min(320px, calc(100% - 24px));
+  background: rgba(18, 22, 31, .97); border: 2px solid var(--accent); border-radius: 12px;
+  padding: 10px 12px; box-shadow: 0 12px 34px rgba(0,0,0,.65); cursor: pointer;
+  animation: toastIn .18s ease-out; text-align: left;
+}
+.goal-pop.from-top { top: calc(var(--wall-tb) + var(--it) * var(--cell) + 10px); left: 50%; transform: translateX(-50%); }
+.goal-pop.from-bottom { bottom: calc(var(--wall-tb) + var(--ib) * var(--cell) + 10px); left: 50%; transform: translateX(-50%); }
+.goal-pop.from-left { left: calc(var(--wall-lr) + var(--il) * var(--cell) + 10px); top: 50%; transform: translateY(-50%); }
+.goal-pop.from-right { right: calc(var(--wall-lr) + var(--ir) * var(--cell) + 10px); top: 50%; transform: translateY(-50%); }
+.goal-pop.centered { left: 50% !important; right: auto !important; top: 50% !important; bottom: auto !important; transform: translate(-50%, -50%) !important; }
+.goal-pop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.goal-pop-name { font-weight: 800; font-size: 16px; }
+.goal-pop-meta { font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.goal-pop-body { font-size: 13px; line-height: 1.4; }
+.goal-pop-notes { margin: 6px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.goal-pop-notes:empty { display: none; }
+.goal-pop-hint { margin-top: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right; }
+
+/* ---------- goal reference list (rules) ---------- */
+.help-body h4 { margin: 12px 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.goal-list { margin: 0; }
+.goal-list dt { font-weight: 700; margin-top: 8px; }
+.goal-list dt .pts { color: var(--accent); font-weight: 700; font-size: 12px; margin-left: 6px; }
+.goal-list dt .offtag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+.goal-list dd { margin: 2px 0 0; color: #c9cfdb; font-size: 13px; line-height: 1.45; }
+.goal-list dt.off, .goal-list dd.off { opacity: .5; }
+
 /* ---------- hud ---------- */
 .hud {
   width: 300px; flex: 0 0 auto;
