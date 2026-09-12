@@ -2,7 +2,7 @@
 // panel from the schema, and runs the bot / simulation helpers.
 
 import { Game, OVER_REASONS } from './engine.js';
-import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled } from './goals.js';
+import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled, goalSizeRange, goalFamilies, FAMILY_LABEL } from './goals.js';
 import { SUITS, RANK_LABELS } from './cards.js';
 import {
   SETTINGS_SCHEMA, SCHEMA_ITEMS, defaultSettings, loadSettings, saveSettings, normalizeSettings,
@@ -45,6 +45,42 @@ const ROW_VISIBLE = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// Shape icons: a snake for chains, a 2x2 grid for connected groups, double
+// arrows for rows / columns, crossed double arrows for straight lines.
+const SHAPE_SVG = {
+  snake: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5h6.5a2.5 2.5 0 0 1 0 5h-4a2 2 0 0 0 0 4H14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  group: '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1"/><rect x="1.5" y="9" width="5.5" height="5.5" rx="1"/><rect x="9" y="9" width="5.5" height="5.5" rx="1"/></g></svg>',
+  row: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12M5 4.5 1.5 8 5 11.5M11 4.5 14.5 8 11 11.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  col: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M4.5 5 8 1.5 11.5 5M4.5 11 8 14.5l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  line: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12M4.5 5.5 2 8l2.5 2.5M11.5 5.5 14 8l-2.5 2.5M8 2v12M5.5 4.5 8 2l2.5 2.5M5.5 11.5 8 14l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const SHAPE_TITLE = {
+  snake: 'Connected chain: bends allowed, no branching',
+  group: 'Connected group: branching allowed',
+  line: 'Straight line: one row or one column, no bends',
+  row: 'A whole row between the walls',
+  col: 'A whole column between the walls',
+};
+function shapeKey(def, s) {
+  if (def.shape === 'chain') return s.chainShape === 'group' ? 'group' : 'snake';
+  if (def.shape === 'rowcol') return 'line';
+  return def.shape;
+}
+function goalCountText(def, s, game) {
+  if (def.shape === 'row') return game ? String(game.cols()) : 'all';
+  if (def.shape === 'col') return game ? String(game.rows()) : 'all';
+  if (def.shape === 'rowcol') return 'all';
+  const [a, b] = goalSizeRange(def, s);
+  return a === b ? String(a) : `${a}–${b}`;
+}
+function goalBadgeHTML(def, s, game) {
+  const k = shapeKey(def, s);
+  return `<span class="goal-badge shape-${k}" title="${SHAPE_TITLE[k]}">${SHAPE_SVG[k]}<span class="goal-count">${goalCountText(def, s, game)}</span></span>`;
+}
+function familyTagsHTML(def) {
+  return goalFamilies(def).map((f) => `<span class="fam-tag">${FAMILY_LABEL[f] || f}</span>`).join('');
+}
 
 function h(tag, attrs = {}, html = '') {
   const e = document.createElement(tag);
@@ -319,12 +355,14 @@ export class UI {
         box.dataset.gid = String(goal.id);
         box.className = 'goal';
         box.innerHTML = `<div class="goal-side">${SIDE_ARROW[side]} ${SIDE_LABEL[side]}</div>` +
-          `<div class="goal-name">${esc(goal.def.name)}</div>` +
+          `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
           `<div class="goal-desc">${esc(goalDesc(goal.def, s))}</div>` +
           `<div class="goal-meta"><span class="pts">${goalPoints(goal.def, s)} pts</span><span class="timer-text"></span></div>` +
           `<div class="goal-bar"><div class="goal-bar-fill"></div></div>`;
         box.title = `${goal.def.name}: ${goalDetail(goal.def, s)} Tap for details.`;
       }
+      const cnt = box.querySelector('.goal-count');
+      if (cnt) cnt.textContent = goalCountText(goal.def, s, g);
     }
   }
 
@@ -341,16 +379,50 @@ export class UI {
     const narrow = this.el.arena.getBoundingClientRect().width < 520;
     const pop = h('div', { class: `goal-pop from-${side}${narrow ? ' centered' : ''}` });
     pop.style.borderColor = `var(--${side})`;
+
+    let actions = '';
+    if (g.status === 'playing' && s.wardSpend === 'manual' && (s.wardCostReroll > 0 || s.wardCostRetreat > 0)) {
+      const btn = (kind, label, cost, ok, why) =>
+        `<button type="button" class="goal-pop-btn" data-ward="${kind}"${ok ? '' : ' disabled'} title="${esc(why)}">${label} · ${cost} ward${cost === 1 ? '' : 's'}</button>`;
+      const parts = [];
+      if (s.wardCostReroll > 0) {
+        const ok = g.wards >= s.wardCostReroll;
+        parts.push(btn('reroll', 'Replace goal', s.wardCostReroll, ok, ok ? 'Draw a different goal for this wall' : 'Not enough wards'));
+      }
+      if (s.wardCostRetreat > 0) {
+        const open = g.inset[side] > 0;
+        const ok = open && g.wards >= s.wardCostRetreat;
+        parts.push(btn('retreat', 'Push wall back', s.wardCostRetreat, ok, !open ? 'This wall is fully open' : ok ? 'Reopen one row or column' : 'Not enough wards'));
+      }
+      actions = `<div class="goal-pop-actions">${parts.join('')}<span class="goal-pop-wards">${g.wards} ward${g.wards === 1 ? '' : 's'} banked</span></div>`;
+    }
+
     pop.innerHTML =
-      `<div class="goal-pop-head"><span class="goal-pop-name" style="color: var(--${side})">${SIDE_ARROW[side]} ${esc(goal.def.name)}</span>` +
+      `<div class="goal-pop-head"><span class="goal-pop-name" style="color: var(--${side})">${SIDE_ARROW[side]} ${goalBadgeHTML(goal.def, s, g)}${esc(goal.def.name)}</span>` +
       `<span class="goal-pop-meta">${goalPoints(goal.def, s)} pts · ${left}</span></div>` +
       `<div class="goal-pop-body">${esc(goalDetail(goal.def, s))}</div>` +
       `<ul class="goal-pop-notes">${goalNotes(goal.def, s).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` +
+      actions +
       `<div class="goal-pop-hint">tap anywhere to dismiss</div>`;
-    pop.addEventListener('click', (e) => { e.stopPropagation(); this.hideGoalPopup(); });
+    pop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = e.target.closest('[data-ward]');
+      if (b && !b.disabled) this.wardAction(b.dataset.ward, side);
+      else this.hideGoalPopup();
+    });
     this.el.arena.appendChild(pop);
     this.goalPop = pop;
-    this.goalPopTimer = setTimeout(() => this.hideGoalPopup(), 7000);
+    this.goalPopTimer = setTimeout(() => this.hideGoalPopup(), 8000);
+  }
+
+  wardAction(kind, side) {
+    const g = this.game;
+    let ok = false;
+    if (kind === 'reroll') ok = g.wardReroll(side);
+    else if (kind === 'retreat') ok = g.wardRetreat(side);
+    this.hideGoalPopup();
+    if (!ok) { this.toast('That ward action is not available right now', 'bad'); return; }
+    this.afterAction();
   }
 
   hideGoalPopup() {
@@ -423,8 +495,14 @@ export class UI {
     this.el.upcoming.innerHTML = s.peekCount ? peek.map((c) => cardHTML(c, 'smallcard')).join('') : '<span class="hint-text">hidden</span>';
     let hint = '';
     if (g.status === 'playing') {
-      if (g.current) hint = 'Click an empty cell to place the card.';
-      if (s.wardSpend === 'manual' && g.wards > 0 && g.curseCells().length) hint += ' Click a glowing curse to remove it.';
+      if (g.current) hint = 'Tap an empty cell to place the card.';
+      if (s.wardSpend === 'manual' && g.wards > 0) {
+        const uses = [];
+        if (s.wardCostCurse > 0 && g.wards >= s.wardCostCurse && g.curseCells().length) uses.push('tap a glowing curse to remove it');
+        if (s.wardCostReroll > 0 && g.wards >= s.wardCostReroll) uses.push('tap a goal to replace it');
+        if (s.wardCostRetreat > 0 && g.wards >= s.wardCostRetreat && SIDES.some((x) => g.inset[x] > 0)) uses.push('tap a goal to push its wall back');
+        if (uses.length) hint += ` Wards: ${uses.join(', or ')}.`;
+      }
     }
     this.el.hintText.textContent = hint;
     this.el.btnBot.textContent = `Bot: ${this.bot ? 'on' : 'off'}`;
@@ -471,8 +549,12 @@ export class UI {
           break;
         }
         case 'retreat':
-          this.toast(`${SIDE_LABEL[ev.side]} wall pushed back`, 'good');
-          this.log(`${SIDE_LABEL[ev.side]} wall pushed back`, 'good');
+          this.toast(`${SIDE_LABEL[ev.side]} wall pushed back${ev.reason === 'ward' ? ' (ward)' : ''}`, 'good');
+          this.log(`${SIDE_LABEL[ev.side]} wall pushed back${ev.reason === 'ward' ? ' with a ward' : ''}`, 'good');
+          break;
+        case 'reroll':
+          this.toast(`Goal replaced: ${ev.from} → ${ev.to}`, 'good');
+          this.log(`Ward spent: ${SIDE_LABEL[ev.side]} goal ${ev.from} replaced by ${ev.to}`, 'good');
           break;
         case 'expire':
           this.toast(`${SIDE_LABEL[ev.side]} goal expired: ${ev.name}`, 'bad');
@@ -670,6 +752,8 @@ export class UI {
       ['Wall moves', walls],
       ['Cards crushed', st.cardsCrushed],
       ['Curses drawn / removed', `${st.cursesDrawn} / ${st.cursesRemoved}`],
+      ['Wards earned / spent', `${st.wardsEarned} / ${st.wardsSpent}`],
+      ['Goals replaced / walls pushed back', `${st.rerolls} / ${st.retreatsBought}`],
       ['Seed', g.seed],
     ];
     const goalLines = GOAL_DEFS.filter((d) => st.goalsOffered[d.id]).map((d) => `${d.name} ${st.goalsCleared[d.id] || 0}/${st.goalsOffered[d.id]}`).join(' · ');
@@ -703,7 +787,15 @@ export class UI {
       `<li><b>Ace</b> in straights: low (A-2-3) or high (Q-K-A), never both (K-A-2 does not count). Ace is 1 for Low Road, Odds and pip sums, and counts as high for High Road.</li>` +
       `<li>${this.settings.mustIncludePlaced ? 'The card you just placed must be part of the goal you complete.' : 'A goal clears after any placement if the board satisfies it.'} ${this.settings.clearedCardsRemoved ? 'Cleared cards leave the board.' : 'Cleared cards stay on the board.'}</li>` +
       `</ul>` +
-      `<h3>Goal cards</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses.</p>` +
+      `<h3>Reading a goal card</h3><p>The badge before the name shows the shape and how many cards it takes:</p><ul class="icon-legend">` +
+      `<li><span class="goal-badge shape-snake">${SHAPE_SVG.snake}<span class="goal-count">4</span></span> a connected chain of 4 cards (bends allowed, no branching)</li>` +
+      `<li><span class="goal-badge shape-group">${SHAPE_SVG.group}<span class="goal-count">4</span></span> a connected group of 4 cards, branching allowed (shown instead of the snake when the chain shape setting is "group")</li>` +
+      `<li><span class="goal-badge shape-line">${SHAPE_SVG.line}<span class="goal-count">3</span></span> 3 cards in a straight line, either a row or a column</li>` +
+      `<li><span class="goal-badge shape-row">${SHAPE_SVG.row}<span class="goal-count">6</span></span> a whole row between the walls (the number is its current length and shrinks as the walls close in)</li>` +
+      `<li><span class="goal-badge shape-col">${SHAPE_SVG.col}<span class="goal-count">6</span></span> a whole column between the walls</li>` +
+      `</ul>` +
+      this.wardRulesHTML(this.settings) +
+      `<h3>Goal cards</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}.</p>` +
       this.goalListHTML(this.settings) +
       `<h3>Other cards</h3><dl class="goal-list"><dt>☠ Curse</dt><dd>Not a playing card. When drawn it lands on a random empty cell and blocks it: nothing can be placed there, chains cannot pass through it, and a row or column containing it cannot be completed. Remove it by spending a ward (earned by clearing goals) or let a wall crush it.</dd></dl>` +
       `<h3>Current rules</h3><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` +
@@ -715,13 +807,22 @@ export class UI {
     this.el.help.hidden = false;
   }
 
+  wardRulesHTML(s) {
+    if (s.wardSpend !== 'manual') return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared; they are spent automatically on a random curse.</p>`;
+    const uses = [];
+    if (s.wardCostCurse > 0) uses.push(`<li><b>Remove a curse</b> (${s.wardCostCurse}): tap a glowing curse.</li>`);
+    if (s.wardCostReroll > 0) uses.push(`<li><b>Replace a goal</b> (${s.wardCostReroll}): tap the goal, then "Replace goal". The new goal ${s.rerollTimer === 'keep' ? 'keeps the remaining time' : 'starts with a fresh timer'}.</li>`);
+    if (s.wardCostRetreat > 0) uses.push(`<li><b>Push a wall back</b> (${s.wardCostRetreat}): tap the goal on a wall that has moved in, then "Push wall back". The reopened row or column comes back empty.</li>`);
+    return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared${s.perkExtraWard ? ', plus one extra for clearing two or more goals at once' : ''}. Wards bank until you spend them (cost in wards):</p><ul>${uses.join('') || '<li>No ward uses are enabled in Settings.</li>'}</ul>`;
+  }
+
   goalListHTML(s) {
     let html = '';
     for (const cat of [...new Set(GOAL_DEFS.map((d) => d.cat))]) {
       html += `<h4>${esc(cat)}</h4><dl class="goal-list">`;
       for (const d of GOAL_DEFS.filter((x) => x.cat === cat)) {
         const on = goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && (typeof d.ordered === 'function' ? d.ordered(s) : !!d.ordered));
-        html += `<dt class="${on ? '' : 'off'}">${esc(d.name)} <span class="pts">${goalPoints(d, s)} pts</span>${on ? '' : ' <span class="offtag">off</span>'}</dt><dd class="${on ? '' : 'off'}">${esc(goalDetail(d, s))}</dd>`;
+        html += `<dt class="${on ? '' : 'off'}">${goalBadgeHTML(d, s, null)}${esc(d.name)} <span class="pts">${goalPoints(d, s)} pts</span>${familyTagsHTML(d)}${on ? '' : ' <span class="offtag">off</span>'}</dt><dd class="${on ? '' : 'off'}">${esc(goalDetail(d, s))}</dd>`;
       }
       html += '</dl>';
     }
@@ -846,7 +947,7 @@ export class UI {
   }
 
   buildGoalsFieldset() {
-    const fs = h('fieldset');
+    const fs = h('fieldset', { class: 'goals-fs' });
     fs.appendChild(h('legend', { text: 'Goal pool' }));
     fs.appendChild(h('p', { class: 'help-p', text: 'The four walls draw from the enabled goals (no duplicates unless allowed above). Points are the base value for clearing that goal. Rows and columns must be completely filled between the walls.' }));
     const tools = h('div', { class: 'goal-tools' });
@@ -860,25 +961,29 @@ export class UI {
       });
     }
     fs.appendChild(tools);
-    const table = h('table', { class: 'goals' }, '<thead><tr><th>On</th><th>Goal</th><th>Requirement</th><th>Points</th></tr></thead>');
+    const table = h('table', { class: 'goals' }, '<thead><tr><th>On</th><th>Goal</th><th>Shape</th><th>Family</th><th>Requirement</th><th>Points</th></tr></thead>');
     const tb = h('tbody');
     let lastCat = null;
     for (const d of GOAL_DEFS) {
-      if (d.cat !== lastCat) { lastCat = d.cat; tb.appendChild(h('tr', { class: 'cat' }, `<td colspan="4">${esc(d.cat)}</td>`)); }
+      if (d.cat !== lastCat) { lastCat = d.cat; tb.appendChild(h('tr', { class: 'cat' }, `<td colspan="6">${esc(d.cat)}</td>`)); }
       const tr = h('tr');
       const on = h('input', { type: 'checkbox' });
       const pts = h('input', { type: 'number', min: 0, step: 5, class: 'pts' });
       const desc = h('td', { class: 'desc' });
+      const shape = h('td', { class: 'shape' });
+      const fam = h('td', { class: 'fam' }, familyTagsHTML(d));
       on.onchange = () => { this.draft.goalsEnabled[d.id] = on.checked; };
       pts.onchange = () => { this.draft.goalPoints[d.id] = Math.max(0, Math.round(Number(pts.value) || 0)); pts.value = this.draft.goalPoints[d.id]; };
       const tdOn = h('td'); tdOn.appendChild(on);
       const tdPts = h('td'); tdPts.appendChild(pts);
-      tr.append(tdOn, h('td', { class: 'name', text: d.name }), desc, tdPts);
+      tr.append(tdOn, h('td', { class: 'name', text: d.name }), shape, fam, desc, tdPts);
       tb.appendChild(tr);
-      this.goalInputs[d.id] = { on, pts, desc };
+      this.goalInputs[d.id] = { on, pts, desc, shape };
     }
     table.appendChild(tb);
-    fs.appendChild(table);
+    const wrap = h('div', { class: 'sim-wrap' });
+    wrap.appendChild(table);
+    fs.appendChild(wrap);
     return fs;
   }
 
@@ -888,7 +993,10 @@ export class UI {
   }
 
   refreshGoalDescs() {
-    for (const d of GOAL_DEFS) this.goalInputs[d.id].desc.textContent = goalDesc(d, this.draft);
+    for (const d of GOAL_DEFS) {
+      this.goalInputs[d.id].desc.textContent = goalDesc(d, this.draft);
+      this.goalInputs[d.id].shape.innerHTML = goalBadgeHTML(d, this.draft, null);
+    }
   }
 
   syncForm() {

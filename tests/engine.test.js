@@ -5,6 +5,7 @@ import { settings, parseCard } from './helpers.js';
 import { makeCard, makeCurse } from '../public/js/cards.js';
 import { botStep } from '../public/js/bot.js';
 import { makeRng } from '../public/js/rng.js';
+import * as awaitGoals from '../public/js/goals.js';
 
 const onlyGoals = (ids) => {
   const s = settings();
@@ -123,7 +124,7 @@ test('goal expiry moves its wall and draws a new goal (time clock)', () => {
 });
 
 test('turn clock ages goals per placement and skips the goal that was just cleared', () => {
-  const s = onlyGoals(['pair', 'fillRow', 'fillCol', 'evens']);
+  const s = onlyGoals(['pair', 'fillRow', 'fillCol', 'parity']);
   s.clock = 'turns'; s.goalTurns = 3; s.wallMode = 'goal'; s.pressureRamp = 1;
   const g = new Game(s, 'turns');
   g.cells.fill(null);
@@ -212,4 +213,61 @@ test('a wall crushing the last empty cells while a card is held ends the game', 
   assert.equal(g.inset.top, 1);
   assert.equal(g.status, 'over');
   assert.equal(g.overReason, 'nospace');
+});
+
+
+test('wards can replace a goal (keeping its time) and push a wall back', () => {
+  const s = settings({ wardCostReroll: 1, wardCostRetreat: 2, rerollTimer: 'keep', wallMode: 'off', curseCount: 0 });
+  const g = new Game(s, 'wardsx');
+  g.wards = 3;
+  const before = g.goals.top;
+  before.timeLeft = 12.5;
+  assert.equal(g.wardReroll('top'), true);
+  assert.notEqual(g.goals.top.def.id, before.def.id, 'a different goal is drawn');
+  assert.equal(g.goals.top.timeLeft, 12.5, 'remaining time carries over');
+  assert.equal(g.wards, 2);
+  assert.equal(g.wardRetreat('left'), false, 'nothing to push back yet');
+  g.advanceWall('left', 'test');
+  assert.equal(g.inset.left, 1);
+  assert.equal(g.wardRetreat('left'), true);
+  assert.equal(g.inset.left, 0);
+  assert.equal(g.wards, 0);
+  assert.equal(g.wardReroll('top'), false, 'no wards left');
+  const ev = g.drain();
+  assert.ok(ev.some((e) => e.type === 'reroll'));
+  assert.ok(ev.some((e) => e.type === 'retreat' && e.reason === 'ward'));
+});
+
+test('a fresh-timer reroll resets the clock and a cost of 0 disables the use', () => {
+  const s = settings({ wardCostReroll: 1, rerollTimer: 'reset', wardCostRetreat: 0, wallMode: 'off', curseCount: 0 });
+  const g = new Game(s, 'wardsy');
+  g.wards = 5;
+  g.goals.top.timeLeft = 2;
+  g.wardReroll('top');
+  assert.equal(g.goals.top.timeLeft, g.goals.top.duration);
+  g.advanceWall('top', 'test');
+  assert.equal(g.wardRetreat('top'), false, 'retreat disabled by cost 0');
+  assert.equal(g.wards, 4);
+});
+
+test('similar goals (same family) do not share the walls', () => {
+  const { GOAL_DEFS, goalFamilies } = awaitGoals;
+  const s = settings({ avoidSimilarGoals: true, allowDuplicateGoals: false });
+  for (let n = 0; n < 40; n++) {
+    const g = new Game(s, 'fam' + n);
+    const fams = Object.values(g.goals).filter(Boolean).flatMap((x) => goalFamilies(x.def));
+    assert.equal(new Set(fams).size, fams.length, `families overlap in game ${n}: ${fams.join(',')}`);
+  }
+  assert.ok(GOAL_DEFS.every((d) => goalFamilies(d).length > 0), 'every goal has a family');
+});
+
+test('a banked ward that can push a wall back keeps a full board alive', () => {
+  const s = settings({ gridW: 3, gridH: 3, wallMode: 'off', curseCount: 0, minCells: 1, wardCostRetreat: 1 });
+  const g = new Game(s, 'retreatlive');
+  g.advanceWall('top', 'test');
+  for (let i = 3; i < 9; i++) g.cells[i] = makeCard(2 + (i % 9), i % 4, 100 + i);
+  g.wards = 1;
+  g.current = null;
+  g.draw();
+  assert.equal(g.status, 'playing', 'the player can buy the top row back');
 });

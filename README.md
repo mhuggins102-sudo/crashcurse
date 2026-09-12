@@ -72,7 +72,7 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Chains | snake paths (bends, no branching); straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
 | Walls | each wall's goal has 40 s; expiry moves that wall in; timers shrink 10 % per minute | Walls & timing |
-| Curses | one ward per clear, spent by clicking a curse; removed curses return via the discard pile | Wards, Deck & curses |
+| Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal, or pushing a wall back, each with its own cost | Wards |
 | Multi-clear | ×2 points per extra goal, +1 ward, 1 curse purged from the deck | Multi-clear perks |
 | Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |
@@ -87,6 +87,8 @@ are starting points; load one, tweak, apply.
 - **Row / column** goals need every open cell of that row or column (between the current walls) filled, so they get easier as the walls close in.
 
 Sum-based goals use pips: ace 1, faces 10. Straights allow ace low or high, no wrap-around.
+
+Every goal shows a badge with a shape icon (snake = chain, grid = connected group, crossed arrows = straight line, ↔ = whole row, ↕ = whole column) and the number of cards it takes; for rows and columns that number is the live length between the walls. Goals also belong to a family (matching ranks, runs, suits, sums, colors, rank tiers, variety, filling), and by default two goals from one family never sit on the walls at the same time, so the four active goals always feel distinct. Tap a goal for its precise wording and for the ward actions.
 
 ## Code layout
 

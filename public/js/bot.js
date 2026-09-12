@@ -57,7 +57,11 @@ export function botStep(game, rng) {
   if (game.status !== 'playing') return false;
   if (game.s.wardSpend === 'manual' && game.wards > 0) {
     const curses = game.curseCells();
-    if (curses.length) game.spendWard(rng.pick(curses));
+    if (game.canAffordWard('curse') && curses.length) game.spendWard(rng.pick(curses));
+    else if (game.canAffordWard('retreat') && game.emptyCells().length < 4) {
+      const closed = ['top', 'right', 'bottom', 'left'].filter((side) => game.inset[side] > 0);
+      if (closed.length) game.wardRetreat(rng.pick(closed));
+    }
   }
   if (!game.current) return false;
   const i = chooseMove(game, rng);

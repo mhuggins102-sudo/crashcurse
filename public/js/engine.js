@@ -3,7 +3,7 @@
 
 import { makeRng, hashSeed, randomSeedString } from './rng.js';
 import { makeCard, makeCurse, cardKey } from './cards.js';
-import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered } from './goals.js';
+import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies } from './goals.js';
 
 export const OVER_REASONS = {
   nospace: 'No empty cell for the drawn card',
@@ -50,7 +50,7 @@ export class Game {
       placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
       multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
       wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
-      wardsEarned: 0, wardsSpent: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0,
+      wardsEarned: 0, wardsSpent: 0, rerolls: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0,
     };
     this.buildDeck();
     for (const side of SIDES) this.newGoal(side);
@@ -104,7 +104,11 @@ export class Game {
 
   hasLegalMove() {
     if (this.emptyCells().length > 0) return true;
-    return this.s.wardSpend === 'manual' && this.wards > 0 && this.curseCells().length > 0;
+    const s = this.s;
+    if (s.wardSpend !== 'manual') return false;
+    if (s.wardCostCurse > 0 && this.wards >= s.wardCostCurse && this.curseCells().length > 0) return true;
+    if (s.wardCostRetreat > 0 && this.wards >= s.wardCostRetreat && SIDES.some((side) => this.inset[side] > 0)) return true;
+    return false;
   }
 
   draw() {
@@ -362,16 +366,24 @@ export class Game {
     return GOAL_DEFS.filter((d) => goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && goalIsOrdered(d, s)));
   }
 
-  newGoal(side) {
+  newGoal(side, { exclude = null, keepTime = null } = {}) {
     const s = this.s;
-    const active = SIDES.filter((x) => x !== side).map((x) => this.goals[x] && this.goals[x].def.id).filter(Boolean);
-    const pool = this.goalPool();
-    let candidates = s.allowDuplicateGoals ? pool : pool.filter((d) => !active.includes(d.id));
+    const others = SIDES.filter((x) => x !== side).map((x) => this.goals[x]).filter(Boolean);
+    const activeIds = others.map((g) => g.def.id);
+    const activeFamilies = new Set(others.flatMap((g) => goalFamilies(g.def)));
+    const pool = this.goalPool().filter((d) => d.id !== exclude);
+    let candidates = s.allowDuplicateGoals ? pool : pool.filter((d) => !activeIds.includes(d.id));
+    if (s.avoidSimilarGoals) {
+      const distinct = candidates.filter((d) => !goalFamilies(d).some((f) => activeFamilies.has(f)));
+      if (distinct.length) candidates = distinct;
+    }
     if (!candidates.length) candidates = pool;
+    if (!candidates.length) candidates = this.goalPool();
     if (!candidates.length) { this.goals[side] = null; this.emit('goal', { side, id: null }); return; }
     const def = this.rng.pick(candidates);
     const duration = this.goalDuration();
-    this.goals[side] = { def, side, duration, timeLeft: duration, id: this.nextId++ };
+    const timeLeft = keepTime != null ? Math.max(this.clock === 'time' ? 1 : 1, Math.min(keepTime, duration)) : duration;
+    this.goals[side] = { def, side, duration, timeLeft, id: this.nextId++ };
     this.stats.goalsOffered[def.id] = (this.stats.goalsOffered[def.id] || 0) + 1;
     this.emit('goal', { side, id: def.id, name: def.name, duration });
   }
@@ -429,11 +441,11 @@ export class Game {
     if (rows <= 0 || cols <= 0 || rows * cols < this.s.minCells) this.gameOver('crushed');
   }
 
-  retreatWall(side) {
+  retreatWall(side, reason = 'perk') {
     if (this.inset[side] <= 0) return false;
     this.inset[side]--;
     this.stats.wallRetreats++;
-    this.emit('retreat', { side });
+    this.emit('retreat', { side, reason });
     return true;
   }
 
@@ -448,21 +460,55 @@ export class Game {
     return true;
   }
 
+  canAffordWard(kind) {
+    const s = this.s;
+    const cost = { curse: s.wardCostCurse, reroll: s.wardCostReroll, retreat: s.wardCostRetreat }[kind] || 0;
+    return this.status === 'playing' && s.wardSpend === 'manual' && cost > 0 && this.wards >= cost ? cost : 0;
+  }
+
+  // Ward use 1: remove a curse from the board.
   spendWard(i) {
-    if (this.status !== 'playing' || this.s.wardSpend !== 'manual' || this.wards <= 0) return false;
+    const cost = this.canAffordWard('curse');
+    if (!cost) return false;
     if (!this.inBounds(i) || !this.cells[i] || this.cells[i].kind !== 'curse') return false;
-    this.wards--;
-    this.stats.wardsSpent++;
+    this.wards -= cost;
+    this.stats.wardsSpent += cost;
     this.removeCurseAt(i, 'ward');
     return true;
   }
 
+  // Ward use 2: replace a wall's goal with a different one.
+  wardReroll(side) {
+    const cost = this.canAffordWard('reroll');
+    const g = this.goals[side];
+    if (!cost || !g) return false;
+    if (this.goalPool().filter((d) => d.id !== g.def.id).length === 0) return false;
+    this.wards -= cost;
+    this.stats.wardsSpent += cost;
+    this.stats.rerolls++;
+    this.newGoal(side, { exclude: g.def.id, keepTime: this.s.rerollTimer === 'keep' ? g.timeLeft : null });
+    this.emit('reroll', { side, from: g.def.name, to: this.goals[side] ? this.goals[side].def.name : null });
+    return true;
+  }
+
+  // Ward use 3: push a wall back out one step.
+  wardRetreat(side) {
+    const cost = this.canAffordWard('retreat');
+    if (!cost || this.inset[side] <= 0) return false;
+    this.wards -= cost;
+    this.stats.wardsSpent += cost;
+    this.stats.retreatsBought++;
+    this.retreatWall(side, 'ward');
+    return true;
+  }
+
   autoSpendWards() {
-    while (this.wards > 0) {
+    const cost = Math.max(1, this.s.wardCostCurse);
+    while (this.wards >= cost) {
       const curses = this.curseCells();
       if (!curses.length) return;
-      this.wards--;
-      this.stats.wardsSpent++;
+      this.wards -= cost;
+      this.stats.wardsSpent += cost;
       this.removeCurseAt(this.rng.pick(curses), 'auto');
     }
   }

@@ -222,10 +222,34 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .goal-pop-notes:empty { display: none; }
 .goal-pop-hint { margin-top: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right; }
 
+/* ---------- goal badges (shape icon + card count) ---------- */
+.goal-badge {
+  display: inline-flex; align-items: center; gap: 3px; vertical-align: middle;
+  padding: 1px 6px 1px 4px; margin-right: 6px; border-radius: 999px;
+  background: rgba(0,0,0,.38); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+  font-size: 12px; font-weight: 800; line-height: 1.3; color: inherit; white-space: nowrap;
+}
+.goal-badge svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.goal-name { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px; }
+.wall-left .goal-name, .wall-right .goal-name { flex-direction: column; gap: 3px; }
+.wall-left .goal-badge, .wall-right .goal-badge { margin-right: 0; }
+.goal-pop-name .goal-badge { color: var(--text); margin-left: 4px; }
+.goal-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.goal-pop-btn { font-size: 12px; padding: 5px 9px; font-weight: 700; }
+.goal-pop-btn:disabled { opacity: .45; cursor: not-allowed; }
+.goal-pop-wards { font-size: 11px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.fam-tag { display: inline-block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; font-weight: 600; }
+table.goals td.shape .goal-badge { margin: 0; }
+table.goals td.fam .fam-tag { margin: 0 4px 0 0; }
+.icon-legend { list-style: none; padding: 0; margin: 0; }
+.icon-legend li { display: flex; align-items: center; gap: 4px; padding: 3px 0; line-height: 1.4; }
+.icon-legend .goal-badge { color: var(--text); flex: 0 0 auto; }
+
 /* ---------- goal reference list (rules) ---------- */
 .help-body h4 { margin: 12px 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .goal-list { margin: 0; }
-.goal-list dt { font-weight: 700; margin-top: 8px; }
+.goal-list dt { font-weight: 700; margin-top: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.goal-list dt .goal-badge { color: var(--text); }
 .goal-list dt .pts { color: var(--accent); font-weight: 700; font-size: 12px; margin-left: 6px; }
 .goal-list dt .offtag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
 .goal-list dd { margin: 2px 0 0; color: #c9cfdb; font-size: 13px; line-height: 1.45; }
