@@ -1,0 +1,527 @@
+// Pure game engine: no DOM, fully deterministic given (settings, seed).
+// The UI, the bot and the tests all drive this class.
+
+import { makeRng, hashSeed, randomSeedString } from './rng.js';
+import { makeCard, makeCurse, cardKey } from './cards.js';
+import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered } from './goals.js';
+
+export const OVER_REASONS = {
+  nospace: 'No empty cell for the drawn card',
+  crushed: 'The walls crushed the board',
+  deck: 'The deck ran out',
+  curse: 'A curse had nowhere to go',
+  stuck: 'The board is stuck: nothing can be placed',
+};
+
+export class Game {
+  constructor(settings, seedStr) {
+    const s = (this.s = settings);
+    this.seed = seedStr || s.seed || randomSeedString();
+    this.rng = makeRng(hashSeed(this.seed));
+    this.W = s.gridW;
+    this.H = s.gridH;
+    this.cells = new Array(this.W * this.H).fill(null);
+    this.inset = { top: 0, right: 0, bottom: 0, left: 0 };
+    this.nextId = 1;
+    this.deck = [];
+    this.discard = [];
+    this.current = null;
+    this.goals = { top: null, right: null, bottom: null, left: null };
+    this.score = 0;
+    this.scoreFrac = 0;
+    this.combo = 0;
+    this.wards = 0;
+    this.level = 1;
+    this.elapsed = 0;
+    this.levelElapsed = 0;
+    this.placements = 0;
+    this.levelPlacements = 0;
+    this.goalBase = this.clock === 'time' ? s.goalSeconds : s.goalTurns;
+    this.curseCount = s.curseCount;
+    this.levelLen = this.clock === 'time' ? s.levelSeconds : s.levelTurns;
+    this.levelLeft = this.levelLen;
+    this.globalLeft = this.globalInterval();
+    this.rotateIdx = 0;
+    this.placementLeft = 0;
+    this.status = 'playing';
+    this.overReason = '';
+    this.events = [];
+    this.stats = {
+      placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
+      multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
+      wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
+      wardsEarned: 0, wardsSpent: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0,
+    };
+    this.buildDeck();
+    for (const side of SIDES) this.newGoal(side);
+    this.draw();
+  }
+
+  get clock() { return this.s.clock; }
+
+  // ---------- geometry ----------
+  idx(r, c) { return r * this.W + c; }
+  rc(i) { return [(i / this.W) | 0, i % this.W]; }
+  rows() { return this.H - this.inset.top - this.inset.bottom; }
+  cols() { return this.W - this.inset.left - this.inset.right; }
+  inBounds(i) {
+    const [r, c] = this.rc(i);
+    return r >= this.inset.top && r < this.H - this.inset.bottom && c >= this.inset.left && c < this.W - this.inset.right;
+  }
+  openCells() { const out = []; for (let i = 0; i < this.cells.length; i++) if (this.inBounds(i)) out.push(i); return out; }
+  emptyCells() { return this.openCells().filter((i) => this.cells[i] == null); }
+  curseCells() { return this.openCells().filter((i) => this.cells[i] && this.cells[i].kind === 'curse'); }
+  cardCells() { return this.openCells().filter((i) => this.cells[i] && this.cells[i].kind === 'card'); }
+  legalCells() { return this.status === 'playing' && this.current ? this.emptyCells() : []; }
+  cursesInDeck() { return this.deck.filter((c) => c.kind === 'curse').length; }
+  upcoming(n) { const out = []; for (let i = this.deck.length - 1; i >= 0 && out.length < n; i--) out.push(this.deck[i]); return out; }
+
+  emit(type, data) { this.events.push({ type, t: this.elapsed, ...data }); }
+  drain() { const ev = this.events; this.events = []; return ev; }
+
+  // ---------- deck ----------
+  buildDeck() {
+    const onBoard = new Set(this.cells.filter((c) => c && c.kind === 'card').map(cardKey));
+    const cards = [];
+    for (let rank = 1; rank <= 13; rank++) for (let suit = 0; suit < 4; suit++) {
+      if (!onBoard.has(rank * 4 + suit)) cards.push(makeCard(rank, suit, this.nextId++));
+    }
+    this.rng.shuffle(cards);
+    const nCurse = Math.max(0, Math.min(this.curseCount, 60));
+    if (this.s.curseSpread === 'even' && nCurse > 0 && cards.length > 0) {
+      const order = cards.slice().reverse(); // top of deck first
+      const L = order.length / nCurse;
+      const positions = [];
+      for (let i = 0; i < nCurse; i++) positions.push(Math.min(order.length, Math.floor(i * L + this.rng() * L)));
+      positions.sort((a, b) => b - a);
+      for (const p of positions) order.splice(p, 0, makeCurse(this.nextId++));
+      this.deck = order.reverse();
+    } else {
+      for (let i = 0; i < nCurse; i++) cards.push(makeCurse(this.nextId++));
+      this.deck = this.rng.shuffle(cards);
+    }
+  }
+
+  hasLegalMove() {
+    if (this.emptyCells().length > 0) return true;
+    return this.s.wardSpend === 'manual' && this.wards > 0 && this.curseCells().length > 0;
+  }
+
+  draw() {
+    let guard = 0;
+    while (this.status === 'playing') {
+      if (++guard > 400) { this.gameOver('stuck'); return; }
+      if (!this.deck.length) {
+        if (this.s.reshuffleDiscards && this.discard.length) {
+          this.deck = this.rng.shuffle(this.discard);
+          this.discard = [];
+          this.stats.reshuffles++;
+          this.emit('reshuffle', { count: this.deck.length });
+        } else { this.gameOver('deck'); return; }
+      }
+      const card = this.deck.pop();
+      if (card.kind === 'curse') { this.placeCurse(card, { fromDeck: true }); continue; }
+      if (!this.hasLegalMove()) {
+        if (this.s.noLegalPlacement === 'discard') {
+          this.discard.push(card); this.stats.discards++;
+          this.emit('discard', { card, reason: 'nospace' });
+          continue;
+        }
+        this.gameOver('nospace');
+        return;
+      }
+      this.current = card;
+      this.placementLeft = this.s.placementSeconds || 0;
+      this.emit('draw', { card });
+      return;
+    }
+  }
+
+  placeCurse(curse, { fromDeck = false } = {}) {
+    if (fromDeck) this.stats.cursesDrawn++;
+    const empties = this.emptyCells();
+    if (!empties.length) {
+      if (fromDeck && this.s.curseOnNoSpace === 'gameover') { this.gameOver('curse'); return false; }
+      if (this.s.cursesReturn) this.discard.push(curse);
+      this.emit('curseNoSpace', {});
+      return false;
+    }
+    const i = this.rng.pick(empties);
+    this.cells[i] = curse;
+    this.emit('curse', { idx: i, fromDeck });
+    return true;
+  }
+
+  // ---------- turns ----------
+  canPlace(i) {
+    return this.status === 'playing' && !!this.current && i >= 0 && i < this.cells.length && this.inBounds(i) && this.cells[i] == null;
+  }
+
+  evaluate(i) {
+    const out = [];
+    for (const side of SIDES) {
+      const g = this.goals[side];
+      if (!g) continue;
+      const found = findSatisfying(this, this.s, g.def, i);
+      if (found) out.push({ side, goal: g, cells: found });
+    }
+    return out;
+  }
+
+  // Non-mutating: which goals would clear if the current card went on cell i.
+  preview(i) {
+    if (!this.canPlace(i)) return null;
+    this.cells[i] = this.current;
+    const res = this.evaluate(i);
+    this.cells[i] = null;
+    return res;
+  }
+
+  place(i) {
+    if (!this.canPlace(i)) return false;
+    const card = this.current;
+    this.current = null;
+    this.placementLeft = 0;
+    this.cells[i] = card;
+    this.placements++;
+    this.levelPlacements++;
+    this.stats.placements++;
+    this.emit('place', { idx: i, card });
+    const cleared = this.evaluate(i);
+    const clearedSides = this.resolveClears(cleared, i);
+    if (this.status !== 'playing') return true;
+    this.afterTurn(clearedSides);
+    if (this.status !== 'playing') return true;
+    this.draw();
+    return true;
+  }
+
+  resolveClears(cleared, placedIdx) {
+    const s = this.s;
+    if (!cleared.length) {
+      if (s.comboEnabled) this.combo = 0;
+      return [];
+    }
+    const n = cleared.length;
+    const base = cleared.reduce((a, c) => a + goalPoints(c.goal.def, s), 0);
+    const multi = n >= 2 ? Math.pow(s.multiMult, n - 1) : 1;
+    const comboMult = s.comboEnabled ? 1 + this.combo * s.comboBonus : 1;
+    const pts = Math.round(base * multi * comboMult);
+    const comboBefore = this.combo;
+    this.score += pts;
+    this.combo += 1;
+    this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
+    this.stats.clears += n;
+    for (const c of cleared) this.stats.goalsCleared[c.goal.def.id] = (this.stats.goalsCleared[c.goal.def.id] || 0) + 1;
+    if (n >= 2) this.stats.multiClears[n] = (this.stats.multiClears[n] || 0) + 1;
+
+    const removed = [];
+    if (s.clearedCardsRemoved) {
+      const set = new Set();
+      for (const c of cleared) for (const i of c.cells) set.add(i);
+      for (const i of set) {
+        const card = this.cells[i];
+        if (card && card.kind === 'card') { this.discard.push(card); this.cells[i] = null; removed.push({ idx: i, card }); }
+      }
+    }
+
+    let wardsGained = n * s.wardsPerClear;
+    const perks = [];
+    if (n >= 2) {
+      if (s.perkExtraWard) { wardsGained += 1; perks.push('+1 extra ward'); }
+      if (s.perkClearAllCurses) { const k = this.removeAllCurses(); if (k) perks.push(`${k} curse${k > 1 ? 's' : ''} purged from the board`); }
+      if (s.perkPushAllWalls) { let k = 0; for (const side of SIDES) if (this.retreatWall(side)) k++; if (k) perks.push('walls pushed back'); }
+      if (s.perkPurgeDeckCurses > 0) { const k = this.purgeDeckCurses(s.perkPurgeDeckCurses); if (k) perks.push(`${k} curse${k > 1 ? 's' : ''} removed from the deck`); }
+      if (s.perkExtraSeconds > 0 && this.clock === 'time') {
+        for (const side of SIDES) if (this.goals[side]) this.goals[side].timeLeft += s.perkExtraSeconds;
+        perks.push(`+${s.perkExtraSeconds}s on every goal`);
+      }
+    }
+    this.wards += wardsGained;
+    this.stats.wardsEarned += wardsGained;
+    if (s.clearPushesWallBack) for (const c of cleared) this.retreatWall(c.side);
+
+    const clearedSides = cleared.map((c) => c.side);
+    this.emit('clear', {
+      clears: cleared.map((c) => ({ side: c.side, id: c.goal.def.id, name: c.goal.def.name, cells: c.cells, points: goalPoints(c.goal.def, s) })),
+      points: pts, n, multi, comboMult, combo: comboBefore, removed, wardsGained, perks, placedIdx,
+    });
+    for (const side of clearedSides) this.newGoal(side);
+    if (s.wardSpend === 'auto') this.autoSpendWards();
+    return clearedSides;
+  }
+
+  afterTurn(clearedSides) {
+    const s = this.s;
+    if (this.clock !== 'turns') return;
+    if (s.wallMode === 'goal') {
+      for (const side of SIDES) {
+        if (clearedSides.includes(side)) continue;
+        const g = this.goals[side];
+        if (!g) continue;
+        g.timeLeft -= 1;
+        if (g.timeLeft <= 0) { this.expireGoal(side); if (this.status !== 'playing') return; }
+      }
+    } else if (s.wallMode === 'global') {
+      this.globalLeft -= 1;
+      if (this.globalLeft <= 0) { this.globalAdvance(); if (this.status !== 'playing') return; this.globalLeft = this.globalInterval(); }
+    }
+    if (s.mode === 'survival') {
+      this.levelLeft -= 1;
+      if (this.levelLeft <= 0) this.levelUp();
+    }
+  }
+
+  tick(dt) {
+    const s = this.s;
+    if (this.status !== 'playing' || !(dt > 0)) return;
+    this.elapsed += dt;
+    this.levelElapsed += dt;
+    if (s.survivalPointsPerSec > 0) {
+      this.scoreFrac += s.survivalPointsPerSec * dt;
+      const whole = Math.floor(this.scoreFrac);
+      if (whole > 0) { this.score += whole; this.scoreFrac -= whole; }
+    }
+    if (this.clock !== 'time') return;
+    if (s.wallMode === 'goal') {
+      for (const side of SIDES) {
+        const g = this.goals[side];
+        if (!g) continue;
+        g.timeLeft -= dt;
+        if (g.timeLeft <= 0) { this.expireGoal(side); if (this.status !== 'playing') return; }
+      }
+    } else if (s.wallMode === 'global') {
+      this.globalLeft -= dt;
+      if (this.globalLeft <= 0) { this.globalAdvance(); if (this.status !== 'playing') return; this.globalLeft += this.globalInterval(); }
+    }
+    if (s.placementSeconds > 0 && this.current) {
+      this.placementLeft -= dt;
+      if (this.placementLeft <= 0) { this.placementTimeout(); if (this.status !== 'playing') return; }
+    }
+    if (s.mode === 'survival') {
+      this.levelLeft -= dt;
+      if (this.levelLeft <= 0) this.levelUp();
+    }
+    this.ensurePlayable();
+  }
+
+  // A timer-driven wall move or spawned curse can leave the held card with
+  // nowhere to go; resolve that the same way a stuck draw is resolved.
+  ensurePlayable() {
+    if (this.status !== 'playing' || !this.current || this.hasLegalMove()) return;
+    if (this.s.noLegalPlacement === 'discard') {
+      const card = this.current;
+      this.current = null;
+      this.discard.push(card);
+      this.stats.discards++;
+      this.emit('discard', { card, reason: 'nospace' });
+      this.draw();
+      return;
+    }
+    this.gameOver('nospace');
+  }
+
+  placementTimeout() {
+    const card = this.current;
+    if (!card) return;
+    const empties = this.emptyCells();
+    if (this.s.placementTimeout === 'random' && empties.length) {
+      const i = this.rng.pick(empties);
+      this.stats.autoplaced++;
+      this.emit('autoplace', { idx: i, card });
+      this.place(i);
+      return;
+    }
+    this.current = null;
+    this.discard.push(card);
+    this.stats.discards++;
+    this.emit('discard', { card, reason: 'timeout' });
+    this.draw();
+  }
+
+  // ---------- goals ----------
+  pressureMult() {
+    const s = this.s;
+    const units = this.clock === 'time' ? this.levelElapsed / 60 : this.levelPlacements / 20;
+    return Math.max(s.pressureFloor, Math.pow(s.pressureRamp, units));
+  }
+
+  goalDuration() {
+    const d = this.goalBase * this.pressureMult();
+    return this.clock === 'time' ? Math.max(3, d) : Math.max(1, Math.round(d));
+  }
+
+  globalInterval() {
+    const base = this.clock === 'time' ? this.s.globalSeconds : this.s.globalTurns;
+    const d = base * this.pressureMult();
+    return this.clock === 'time' ? Math.max(2, d) : Math.max(1, Math.round(d));
+  }
+
+  goalPool() {
+    const s = this.s;
+    return GOAL_DEFS.filter((d) => goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && goalIsOrdered(d, s)));
+  }
+
+  newGoal(side) {
+    const s = this.s;
+    const active = SIDES.filter((x) => x !== side).map((x) => this.goals[x] && this.goals[x].def.id).filter(Boolean);
+    const pool = this.goalPool();
+    let candidates = s.allowDuplicateGoals ? pool : pool.filter((d) => !active.includes(d.id));
+    if (!candidates.length) candidates = pool;
+    if (!candidates.length) { this.goals[side] = null; this.emit('goal', { side, id: null }); return; }
+    const def = this.rng.pick(candidates);
+    const duration = this.goalDuration();
+    this.goals[side] = { def, side, duration, timeLeft: duration, id: this.nextId++ };
+    this.stats.goalsOffered[def.id] = (this.stats.goalsOffered[def.id] || 0) + 1;
+    this.emit('goal', { side, id: def.id, name: def.name, duration });
+  }
+
+  expireGoal(side) {
+    const s = this.s;
+    const g = this.goals[side];
+    this.stats.goalsExpired++;
+    if (g) this.stats.goalsExpiredBy[g.def.id] = (this.stats.goalsExpiredBy[g.def.id] || 0) + 1;
+    if (s.expirePenaltyPoints > 0) this.score = Math.max(0, this.score - s.expirePenaltyPoints);
+    this.emit('expire', { side, id: g ? g.def.id : null, name: g ? g.def.name : '' });
+    const pen = s.expiredGoalPenalty;
+    if (pen === 'wall' || pen === 'both') { this.advanceWall(side, 'expire'); if (this.status !== 'playing') return; }
+    if (pen === 'curse' || pen === 'both') this.placeCurse(makeCurse(this.nextId++), { fromDeck: false });
+    this.newGoal(side);
+  }
+
+  // ---------- walls ----------
+  globalAdvance() {
+    const side = this.s.globalOrder === 'random' ? this.rng.pick(SIDES) : SIDES[this.rotateIdx++ % SIDES.length];
+    this.advanceWall(side, 'global');
+  }
+
+  advanceWall(side, reason) {
+    const { top, right, bottom, left } = this.inset;
+    const line = [];
+    if (this.rows() > 0 && this.cols() > 0) {
+      if (side === 'top') for (let c = left; c < this.W - right; c++) line.push(this.idx(top, c));
+      if (side === 'bottom') for (let c = left; c < this.W - right; c++) line.push(this.idx(this.H - 1 - bottom, c));
+      if (side === 'left') for (let r = top; r < this.H - bottom; r++) line.push(this.idx(r, left));
+      if (side === 'right') for (let r = top; r < this.H - bottom; r++) line.push(this.idx(r, this.W - 1 - right));
+    }
+    const crushed = [];
+    const relocate = [];
+    for (const i of line) {
+      const c = this.cells[i];
+      if (!c) continue;
+      if (c.kind === 'card') {
+        this.discard.push(c);
+        this.stats.cardsCrushed++;
+        if (this.s.crushPenalty > 0) this.score = Math.max(0, this.score - this.s.crushPenalty);
+      } else {
+        this.stats.cursesCrushed++;
+        if (this.s.crushedCurses === 'relocate') relocate.push(c);
+        else if (this.s.cursesReturn) this.discard.push(c);
+      }
+      crushed.push({ idx: i, card: c });
+      this.cells[i] = null;
+    }
+    this.inset[side]++;
+    this.stats.wallMoves[side]++;
+    this.emit('wall', { side, reason, crushed });
+    for (const c of relocate) this.placeCurse(c, { fromDeck: false });
+    const rows = this.rows(), cols = this.cols();
+    if (rows <= 0 || cols <= 0 || rows * cols < this.s.minCells) this.gameOver('crushed');
+  }
+
+  retreatWall(side) {
+    if (this.inset[side] <= 0) return false;
+    this.inset[side]--;
+    this.stats.wallRetreats++;
+    this.emit('retreat', { side });
+    return true;
+  }
+
+  // ---------- curses & wards ----------
+  removeCurseAt(i, how) {
+    const c = this.cells[i];
+    if (!c || c.kind !== 'curse') return false;
+    this.cells[i] = null;
+    if (this.s.cursesReturn) this.discard.push(c);
+    this.stats.cursesRemoved++;
+    this.emit('curseRemoved', { idx: i, how });
+    return true;
+  }
+
+  spendWard(i) {
+    if (this.status !== 'playing' || this.s.wardSpend !== 'manual' || this.wards <= 0) return false;
+    if (!this.inBounds(i) || !this.cells[i] || this.cells[i].kind !== 'curse') return false;
+    this.wards--;
+    this.stats.wardsSpent++;
+    this.removeCurseAt(i, 'ward');
+    return true;
+  }
+
+  autoSpendWards() {
+    while (this.wards > 0) {
+      const curses = this.curseCells();
+      if (!curses.length) return;
+      this.wards--;
+      this.stats.wardsSpent++;
+      this.removeCurseAt(this.rng.pick(curses), 'auto');
+    }
+  }
+
+  removeAllCurses() {
+    let k = 0;
+    for (const i of this.curseCells()) if (this.removeCurseAt(i, 'perk')) k++;
+    return k;
+  }
+
+  purgeDeckCurses(n) {
+    let k = 0;
+    for (let i = this.deck.length - 1; i >= 0 && k < n; i--) {
+      if (this.deck[i].kind === 'curse') { this.deck.splice(i, 1); k++; }
+    }
+    for (let i = this.discard.length - 1; i >= 0 && k < n; i--) {
+      if (this.discard[i].kind === 'curse') { this.discard.splice(i, 1); k++; }
+    }
+    if (k) this.emit('purge', { count: k });
+    return k;
+  }
+
+  // ---------- levels & end ----------
+  levelUp() {
+    const s = this.s;
+    const bonus = s.levelBonus * this.level;
+    this.score += bonus;
+    this.level++;
+    this.stats.levels = this.level;
+    this.levelLen += this.clock === 'time' ? s.levelSecondsGrowth : s.levelTurnsGrowth;
+    this.levelLeft = this.levelLen;
+    this.levelElapsed = 0;
+    this.levelPlacements = 0;
+    this.curseCount += s.levelCurseGrowth;
+    this.goalBase = this.clock === 'time' ? Math.max(3, this.goalBase * s.levelPressureGrowth) : Math.max(1, Math.round(this.goalBase * s.levelPressureGrowth));
+    if (s.levelResetWalls) this.inset = { top: 0, right: 0, bottom: 0, left: 0 };
+    if (s.levelBoard === 'clear') this.cells.fill(null);
+    else if (s.levelBoard === 'clearCurses') for (let i = 0; i < this.cells.length; i++) if (this.cells[i] && this.cells[i].kind === 'curse') this.cells[i] = null;
+    for (let i = 0; i < this.cells.length; i++) if (this.cells[i] && !this.inBounds(i)) this.cells[i] = null;
+    this.discard = [];
+    this.current = null;
+    this.buildDeck();
+    for (const side of SIDES) this.newGoal(side);
+    this.globalLeft = this.globalInterval();
+    this.status = 'levelup';
+    this.emit('levelup', { level: this.level, bonus, curseCount: this.curseCount, goalBase: this.goalBase, levelLen: this.levelLen });
+  }
+
+  continueLevel() {
+    if (this.status !== 'levelup') return;
+    this.status = 'playing';
+    this.draw();
+  }
+
+  gameOver(reason) {
+    if (this.status === 'over') return;
+    this.status = 'over';
+    this.overReason = reason;
+    this.stats.timeSurvived = this.elapsed;
+    this.emit('over', { reason, text: OVER_REASONS[reason] || reason });
+  }
+}
