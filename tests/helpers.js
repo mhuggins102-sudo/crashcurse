@@ -1,4 +1,4 @@
-import { makeCard, makeCurse } from '../public/js/cards.js';
+import { makeCard, makeCurse, makeTile } from '../public/js/cards.js';
 import { defaultSettings } from '../public/js/settings.js';
 
 const SUIT_OF = { S: 0, H: 1, D: 2, C: 3 };
@@ -25,8 +25,31 @@ export function board(rows, inset = {}) {
   return { W, H, cells, inset: { top: 0, right: 0, bottom: 0, left: 0, ...inset } };
 }
 
+// Card-deck settings (the tests below were written against the card goals).
 export function settings(overrides = {}) {
-  return { ...defaultSettings(), ...overrides };
+  return { ...defaultSettings(), deckType: 'cards', ...overrides };
+}
+
+export function tileSettings(overrides = {}) {
+  return { ...defaultSettings(), deckType: 'tiles', ...overrides };
+}
+
+const COLOR_OF = { R: 0, Y: 1, G: 2, B: 3, P: 4, T: 5 };
+const SYM_OF = { '.': 0, d: 1, t: 2, s: 3 };
+
+// "R." -> red blank, "Bd" -> blue dot, "Gt" -> green triangle, "Ps" -> purple star
+export function parseTile(tok) {
+  if (tok === '..' || tok === '.') return null;
+  if (tok === 'XX') return makeCurse(nextId++);
+  return makeTile(COLOR_OF[tok[0]], SYM_OF[tok[1]], nextId++);
+}
+
+export function tileBoard(rows, inset = {}) {
+  const grid = rows.map((r) => r.trim().split(/\s+/));
+  const H = grid.length, W = grid[0].length;
+  const cells = [];
+  for (const row of grid) for (const tok of row) cells.push(parseTile(tok));
+  return { W, H, cells, inset: { top: 0, right: 0, bottom: 0, left: 0, ...inset } };
 }
 
 export const idx = (b, r, c) => r * b.W + c;

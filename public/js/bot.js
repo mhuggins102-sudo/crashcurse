@@ -21,6 +21,12 @@ function potential(game, i) {
     if (!o) continue;
     if (o.kind === 'curse') { v -= 0.5; continue; }
     v += 0.6;
+    if (card.kind === 'tile') {
+      if (o.color === card.color) v += 2.5;
+      if (o.sym && o.sym === card.sym) v += 2;
+      if (!o.sym && !card.sym) v += 0.7;
+      continue;
+    }
     if (o.suit === card.suit) v += 2;
     if (o.rank === card.rank) v += 2.5;
     if (Math.abs(o.rank - card.rank) === 1) v += 1.2;

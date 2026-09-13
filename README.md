@@ -1,17 +1,26 @@
 # Crash Curse
 
-A card-grid puzzle prototype built for playtesting. A standard 52-card deck is
-mixed with curse cards. Each turn you draw a card and place it anywhere on the
-grid. The four walls around the grid each show a goal (a poker hand made from a
-bendy chain of cards, or a row/column requirement). Complete a goal with the
-card you just placed and it clears: you score, earn a ward that removes a
-curse, and the wall draws a new goal. Let a goal expire and its wall crashes
-inward, crushing whatever is in its way, until nothing can be placed.
+A grid puzzle prototype built for playtesting. A deck of tiles (or, optionally,
+a standard 52-card deck) is mixed with curse cards. Each turn you draw a piece
+and place it anywhere on the grid. The four walls around the grid each show a
+goal: a pattern made from a bendy chain of pieces, a straight line, a full
+row or column, a 2×2 block, a plus shape, or a board-wide count. Complete a
+goal with the piece you just placed and it clears: you score, earn a ward,
+and the wall draws a new goal. Let a goal expire and its wall crashes inward,
+crushing whatever is in its way, until nothing can be placed.
 
-Every rule that could be a knob is a knob: the **Settings** panel exposes about
-50 sliders, toggles and selects plus a per-goal on/off + points table, presets,
-JSON import/export, share links, and a headless simulation that plays a rule
-set with a greedy bot and reports which goals get cleared and how games end.
+**The tile deck** (default): 5 colors × 10 tiles = 50 tiles. Each color has 5
+blank tiles, 2 with a dot, 2 with a triangle and 1 with a star. The colors,
+the counts per color and the number of curses are all settings. About 54 tile
+goals ship in six categories (color chains, rainbow chains, symbol chains,
+straight lines, full rows & columns, blocks & patterns, board-wide); the
+playing-card deck keeps its own 30 goals.
+
+Every rule that could be a knob is a knob: the **Settings** panel exposes
+about 60 sliders, toggles and selects plus a per-goal on/off + points table,
+presets, JSON import/export, share links, and a headless simulation that
+plays a rule set with a greedy bot and reports which goals get cleared and
+how games end.
 
 ## Running it
 
@@ -68,8 +77,8 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Piece | Default | Where to tune |
 | --- | --- | --- |
 | Grid | 6×6, game over below 4 open cells | Board |
-| Deck | 52 cards + 6 curses, random spread, discards reshuffle back in | Deck & curses |
-| Chains | snake paths (bends, no branching); straights and flushes are 4 long | Placement & clearing |
+| Deck | tiles (5 colors × 5 blank + 2 dot + 2 triangle + 1 star) or 52 cards, plus 6 curses; discards reshuffle back in | Deck & curses |
+| Chains | snake paths (bends, no branching); for cards, straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
 | Walls | each wall's goal has 40 s; expiry moves that wall in; timers shrink 10 % per minute | Walls & timing |
 | Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal, or pushing a wall back, each with its own cost | Wards |
@@ -77,7 +86,7 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |
 
-Presets (Chill, Action, Brutal, Turn-based, Global timer, Survival, Poker only)
+Presets (Chill, Action, Brutal, Turn-based, Global timer, Survival, Playing cards, Poker only)
 are starting points; load one, tweak, apply.
 
 ### Goal shapes
@@ -85,8 +94,10 @@ are starting points; load one, tweak, apply.
 - **Chain** goals accept any orthogonally connected snake of exactly N cards that includes the card you just placed. Bends are fine; a branch (a plus shape) is not a snake. Switch *Chain shape* to "any connected group" to allow branches.
 - **Straight line** goals need N cards in one row or column segment.
 - **Row / column** goals need every open cell of that row or column (between the current walls) filled, so they get easier as the walls close in.
+- **Block** goals need a 2×2 square; **plus** goals a centre and its four side neighbours; **board-wide** goals count matching tiles anywhere between the walls and clear all of them at once.
+- A goal that can no longer fit between the walls (a Rainbow Row on a 4-wide board, a plus on a 2-row board) is never offered, and an active one is swapped for free when a wall makes it impossible.
 
-Sum-based goals use pips: ace 1, faces 10. Straights allow ace low or high, no wrap-around.
+Card sums use pips: ace 1, faces 10. Straights allow ace low or high, no wrap-around.
 
 Every goal shows a badge with a shape icon (snake = chain, grid = connected group, crossed arrows = straight line, ↔ = whole row, ↕ = whole column) and the number of cards it takes; for rows and columns that number is the live length between the walls. Goals also belong to a family (matching ranks, runs, suits, sums, colors, rank tiers, variety, filling), and by default two goals from one family never sit on the walls at the same time, so the four active goals always feel distinct. Tap a goal for its precise wording and for the ward actions.
 
@@ -97,7 +108,9 @@ public/
   index.html, css/style.css        shell and styling
   js/rng.js                        seeded RNG (a seed reproduces a whole game)
   js/cards.js                      card model
-  js/goals.js                      goal definitions + chain/line/row detection
+  js/shapes.js                     chain / line / row / block / plus enumerators
+  js/cardgoals.js, js/tilegoals.js goal definitions for each deck
+  js/goals.js                      goal registry, feasibility and detection glue
   js/settings.js                   settings schema, defaults, presets, persistence
   js/engine.js                     pure game engine (no DOM), drives everything
   js/bot.js, js/simworker.js       greedy bot, headless simulation, web worker
@@ -106,4 +119,4 @@ tests/                             node:test suites for detection and engine
 scripts/sim.js                     CLI simulation
 ```
 
-Adding a goal is one entry in `GOAL_DEFS` (shape, size, points, predicate); adding a setting is one entry in `SETTINGS_SCHEMA`. The panel, presets, JSON export and validation pick it up automatically.
+Adding a goal is one entry in `TILE_GOALS` or `CARD_GOALS` (shape, size, family, points, predicate, plus a sentence in the details map); adding a setting is one entry in `SETTINGS_SCHEMA`. The panel, presets, JSON export and validation pick it up automatically.

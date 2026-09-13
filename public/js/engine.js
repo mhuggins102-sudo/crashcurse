@@ -2,8 +2,8 @@
 // The UI, the bot and the tests all drive this class.
 
 import { makeRng, hashSeed, randomSeedString } from './rng.js';
-import { makeCard, makeCurse, cardKey } from './cards.js';
-import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies } from './goals.js';
+import { makeCard, makeTile, makeCurse, pieceKey } from './cards.js';
+import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies, goalFeasible, goalDeck } from './goals.js';
 
 export const OVER_REASONS = {
   nospace: 'No empty cell for the drawn card',
@@ -71,7 +71,7 @@ export class Game {
   openCells() { const out = []; for (let i = 0; i < this.cells.length; i++) if (this.inBounds(i)) out.push(i); return out; }
   emptyCells() { return this.openCells().filter((i) => this.cells[i] == null); }
   curseCells() { return this.openCells().filter((i) => this.cells[i] && this.cells[i].kind === 'curse'); }
-  cardCells() { return this.openCells().filter((i) => this.cells[i] && this.cells[i].kind === 'card'); }
+  cardCells() { return this.openCells().filter((i) => this.cells[i] && this.cells[i].kind !== 'curse'); }
   legalCells() { return this.status === 'playing' && this.current ? this.emptyCells() : []; }
   cursesInDeck() { return this.deck.filter((c) => c.kind === 'curse').length; }
   upcoming(n) { const out = []; for (let i = this.deck.length - 1; i >= 0 && out.length < n; i--) out.push(this.deck[i]); return out; }
@@ -80,12 +80,34 @@ export class Game {
   drain() { const ev = this.events; this.events = []; return ev; }
 
   // ---------- deck ----------
-  buildDeck() {
-    const onBoard = new Set(this.cells.filter((c) => c && c.kind === 'card').map(cardKey));
-    const cards = [];
+  cardPieces() {
+    const onBoard = new Set(this.cells.filter((c) => c && c.kind === 'card').map(pieceKey));
+    const out = [];
     for (let rank = 1; rank <= 13; rank++) for (let suit = 0; suit < 4; suit++) {
-      if (!onBoard.has(rank * 4 + suit)) cards.push(makeCard(rank, suit, this.nextId++));
+      if (!onBoard.has(rank * 4 + suit)) out.push(makeCard(rank, suit, this.nextId++));
     }
+    return out;
+  }
+
+  // Tiles: per color, a configurable number of blanks, dots, triangles and
+  // stars. Tiles still on the board are left out of the rebuilt deck.
+  tilePieces() {
+    const s = this.s;
+    const need = new Map();
+    const spec = [[0, s.tileBlanks], [1, s.tileDots], [2, s.tileTriangles], [3, s.tileStars]];
+    for (let color = 0; color < s.tileColors; color++) for (const [sym, n] of spec) need.set(color * 4 + sym, n);
+    for (const c of this.cells) {
+      if (!c || c.kind !== 'tile') continue;
+      const k = pieceKey(c);
+      if ((need.get(k) || 0) > 0) need.set(k, need.get(k) - 1);
+    }
+    const out = [];
+    for (const [k, n] of need) for (let i = 0; i < n; i++) out.push(makeTile(k >> 2, k & 3, this.nextId++));
+    return out;
+  }
+
+  buildDeck() {
+    const cards = this.s.deckType === 'tiles' ? this.tilePieces() : this.cardPieces();
     this.rng.shuffle(cards);
     const nCurse = Math.max(0, Math.min(this.curseCount, 60));
     if (this.s.curseSpread === 'even' && nCurse > 0 && cards.length > 0) {
@@ -225,7 +247,7 @@ export class Game {
       for (const c of cleared) for (const i of c.cells) set.add(i);
       for (const i of set) {
         const card = this.cells[i];
-        if (card && card.kind === 'card') { this.discard.push(card); this.cells[i] = null; removed.push({ idx: i, card }); }
+        if (card && card.kind !== 'curse') { this.discard.push(card); this.cells[i] = null; removed.push({ idx: i, card }); }
       }
     }
 
@@ -363,7 +385,20 @@ export class Game {
 
   goalPool() {
     const s = this.s;
-    return GOAL_DEFS.filter((d) => goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && goalIsOrdered(d, s)));
+    const deck = s.deckType || 'cards';
+    return GOAL_DEFS.filter((d) => goalDeck(d) === deck && goalEnabled(d, s)
+      && !(s.chainShape === 'group' && d.shape === 'chain' && goalIsOrdered(d, s))
+      && goalFeasible(d, s, this));
+  }
+
+  // After the walls move, a goal that can no longer fit is replaced for free.
+  swapInfeasibleGoals() {
+    for (const side of SIDES) {
+      const g = this.goals[side];
+      if (!g || goalFeasible(g.def, this.s, this)) continue;
+      this.newGoal(side, { exclude: g.def.id, keepTime: g.timeLeft });
+      this.emit('goalSwap', { side, from: g.def.name, to: this.goals[side] ? this.goals[side].def.name : null });
+    }
   }
 
   newGoal(side, { exclude = null, keepTime = null } = {}) {
@@ -375,7 +410,13 @@ export class Game {
     let candidates = s.allowDuplicateGoals ? pool : pool.filter((d) => !activeIds.includes(d.id));
     if (s.avoidSimilarGoals) {
       const distinct = candidates.filter((d) => !goalFamilies(d).some((f) => activeFamilies.has(f)));
-      if (distinct.length) candidates = distinct;
+      if (distinct.length) {
+        // Draw a family first, then a goal inside it, so goals in small
+        // families are not offered far more often than goals in big ones.
+        const fams = [...new Set(distinct.flatMap((d) => goalFamilies(d)))];
+        const fam = this.rng.pick(fams);
+        candidates = distinct.filter((d) => goalFamilies(d).includes(fam));
+      }
     }
     if (!candidates.length) candidates = pool;
     if (!candidates.length) candidates = this.goalPool();
@@ -421,7 +462,7 @@ export class Game {
     for (const i of line) {
       const c = this.cells[i];
       if (!c) continue;
-      if (c.kind === 'card') {
+      if (c.kind !== 'curse') {
         this.discard.push(c);
         this.stats.cardsCrushed++;
         if (this.s.crushPenalty > 0) this.score = Math.max(0, this.score - this.s.crushPenalty);
@@ -438,7 +479,8 @@ export class Game {
     this.emit('wall', { side, reason, crushed });
     for (const c of relocate) this.placeCurse(c, { fromDeck: false });
     const rows = this.rows(), cols = this.cols();
-    if (rows <= 0 || cols <= 0 || rows * cols < this.s.minCells) this.gameOver('crushed');
+    if (rows <= 0 || cols <= 0 || rows * cols < this.s.minCells) { this.gameOver('crushed'); return; }
+    this.swapInfeasibleGoals();
   }
 
   retreatWall(side, reason = 'perk') {

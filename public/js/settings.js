@@ -16,7 +16,15 @@ export const SETTINGS_SCHEMA = [
   {
     group: 'Deck & curses',
     items: [
-      { key: 'curseCount', label: 'Curse cards in the deck', type: 'range', min: 0, max: 30, step: 1, def: 6 },
+      { key: 'deckType', label: 'Deck', type: 'select', def: 'tiles',
+        options: [['tiles', 'Tiles: colors and symbols'], ['cards', 'Playing cards']],
+        help: 'Each deck has its own goal pool. Tiles: N colors, each with blanks and symbol tiles as set below.' },
+      { key: 'tileColors', label: 'Tile colors', type: 'range', min: 3, max: 6, step: 1, def: 5 },
+      { key: 'tileBlanks', label: 'Blank tiles per color', type: 'range', min: 0, max: 8, step: 1, def: 5 },
+      { key: 'tileDots', label: 'Dot tiles per color', type: 'range', min: 0, max: 4, step: 1, def: 2 },
+      { key: 'tileTriangles', label: 'Triangle tiles per color', type: 'range', min: 0, max: 4, step: 1, def: 2 },
+      { key: 'tileStars', label: 'Star tiles per color', type: 'range', min: 0, max: 4, step: 1, def: 1 },
+      { key: 'curseCount', label: 'Curses in the deck', type: 'range', min: 0, max: 30, step: 1, def: 6 },
       { key: 'curseSpread', label: 'Curse distribution', type: 'select', def: 'random',
         options: [['random', 'Random shuffle'], ['even', 'Evenly spaced']],
         help: 'Evenly spaced guarantees a steady drip of curses instead of clumps.' },
@@ -147,7 +155,8 @@ export const SETTINGS_SCHEMA = [
 export const SCHEMA_ITEMS = SETTINGS_SCHEMA.flatMap((g) => g.items);
 export const SCHEMA_BY_KEY = Object.fromEntries(SCHEMA_ITEMS.map((it) => [it.key, it]));
 
-const DEFAULT_DISABLED_GOALS = new Set(['pair', 'fullHouse', 'fourKind', 'straightFlush', 'royalFlush', 'suitedCol', 'ladderCol']);
+const DEFAULT_DISABLED_GOALS = new Set(['pair', 'fullHouse', 'fourKind', 'straightFlush', 'royalFlush', 'suitedCol', 'ladderCol',
+  'tTwins', 'tConstellation', 'tSymbolSquare', 'tCross']);
 
 export function defaultSettings() {
   const s = {};
@@ -169,7 +178,8 @@ export const PRESETS = {
   'Turn-based': { clock: 'turns', goalTurns: 8, mode: 'endless' },
   'Global timer': { wallMode: 'global', globalSeconds: 25, expiredGoalPenalty: 'none' },
   'Survival': { mode: 'survival', levelSeconds: 90 },
-  'Poker only': { goalsEnabled: Object.fromEntries(GOAL_DEFS.map((d) => [d.id, d.cat === 'Poker chains' && d.id !== 'royalFlush'])) },
+  'Playing cards': { deckType: 'cards' },
+  'Poker only': { deckType: 'cards', goalsEnabled: Object.fromEntries(GOAL_DEFS.map((d) => [d.id, d.cat === 'Poker chains' && d.id !== 'royalFlush'])) },
 };
 
 export function applyPreset(base, name) {

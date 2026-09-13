@@ -2,8 +2,8 @@
 // panel from the schema, and runs the bot / simulation helpers.
 
 import { Game, OVER_REASONS } from './engine.js';
-import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled, goalSizeRange, goalFamilies, FAMILY_LABEL } from './goals.js';
-import { SUITS, RANK_LABELS } from './cards.js';
+import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled, goalSizeRange, goalFamilies, goalDeck, pieceWord, FAMILY_LABEL } from './goals.js';
+import { SUITS, RANK_LABELS, TILE_COLORS, TILE_COLOR_NAMES, SYMBOL_GLYPHS, SYMBOL_NAMES, pieceLabel } from './cards.js';
 import {
   SETTINGS_SCHEMA, SCHEMA_ITEMS, defaultSettings, loadSettings, saveSettings, normalizeSettings,
   PRESETS, applyPreset, settingsToJSON, settingsFromJSON,
@@ -15,10 +15,20 @@ const SIDE_LABEL = { top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left' 
 const SIDE_ARROW = { top: '▲', right: '▶', bottom: '▼', left: '◀' };
 const MULTI_WORDS = ['', '', 'DOUBLE', 'TRIPLE', 'QUADRUPLE'];
 const BEST_KEY = 'crashcurse.best.v1';
-const DESC_KEYS = new Set(['straightLen', 'flushLen', 'straightOrdered', 'lineLowAvg', 'lineHighAvg', 'chainShape']);
+const DESC_KEYS = new Set(['straightLen', 'flushLen', 'straightOrdered', 'lineLowAvg', 'lineHighAvg', 'chainShape', 'tileColors', 'deckType', 'lineMinLen']);
 
 // Rows of the settings form that only matter for some combinations.
 const ROW_VISIBLE = {
+  tileColors: (d) => d.deckType === 'tiles',
+  tileBlanks: (d) => d.deckType === 'tiles',
+  tileDots: (d) => d.deckType === 'tiles',
+  tileTriangles: (d) => d.deckType === 'tiles',
+  tileStars: (d) => d.deckType === 'tiles',
+  straightOrdered: (d) => d.deckType === 'cards',
+  straightLen: (d) => d.deckType === 'cards',
+  flushLen: (d) => d.deckType === 'cards',
+  lineLowAvg: (d) => d.deckType === 'cards',
+  lineHighAvg: (d) => d.deckType === 'cards',
   goalSeconds: (d) => d.clock === 'time' && d.wallMode === 'goal',
   goalTurns: (d) => d.clock === 'turns' && d.wallMode === 'goal',
   expiredGoalPenalty: (d) => d.wallMode === 'goal',
@@ -54,6 +64,9 @@ const SHAPE_SVG = {
   row: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12M5 4.5 1.5 8 5 11.5M11 4.5 14.5 8 11 11.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   col: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M4.5 5 8 1.5 11.5 5M4.5 11 8 14.5l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   line: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12M4.5 5.5 2 8l2.5 2.5M11.5 5.5 14 8l-2.5 2.5M8 2v12M5.5 4.5 8 2l2.5 2.5M5.5 11.5 8 14l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  square: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 2v12M2 8h12" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+  plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5h5v4h4v5h-4v4h-5v-4h-4v-5h4z" fill="currentColor"/></svg>',
+  board: '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.6"/><circle cx="8" cy="3" r="1.6"/><circle cx="13" cy="3" r="1.6"/><circle cx="3" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13" cy="8" r="1.6"/><circle cx="3" cy="13" r="1.6"/><circle cx="8" cy="13" r="1.6"/><circle cx="13" cy="13" r="1.6"/></g></svg>',
 };
 const SHAPE_TITLE = {
   snake: 'Connected chain: bends allowed, no branching',
@@ -61,8 +74,12 @@ const SHAPE_TITLE = {
   line: 'Straight line: one row or one column, no bends',
   row: 'A whole row between the walls',
   col: 'A whole column between the walls',
+  square: 'A 2×2 block',
+  plus: 'A plus shape: a centre and its four side neighbours',
+  board: 'Anywhere on the board (a count between the walls)',
 };
 function shapeKey(def, s) {
+  if (def.icon) return def.icon;
   if (def.shape === 'chain') return s.chainShape === 'group' ? 'group' : 'snake';
   if (def.shape === 'rowcol') return 'line';
   return def.shape;
@@ -97,14 +114,22 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-export function cardHTML(card, extra = '') {
-  if (!card) return '';
-  if (card.kind === 'curse') return `<div class="curse ${extra}">☠</div>`;
-  return `<div class="card ${card.red ? 'red' : 'black'} ${extra}"><span class="rank">${RANK_LABELS[card.rank]}</span><span class="suit">${SUITS[card.suit]}</span></div>`;
-}
+const SYM_SVG = {
+  1: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.3"/></svg>',
+  2: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.4 13.6 12.8H2.4z"/></svg>',
+  3: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.5l-4.2 2.3 1-4.6L1.3 6l4.7-.5z"/></svg>',
+};
 
-function cardText(card) {
-  return card.kind === 'curse' ? 'a curse' : RANK_LABELS[card.rank] + SUITS[card.suit];
+export function pieceHTML(p, extra = '') {
+  if (!p) return '';
+  if (p.kind === 'curse') return `<div class="curse ${extra}">☠</div>`;
+  if (p.kind === 'tile') return `<div class="tile tc${p.color} ${extra}" title="${TILE_COLOR_NAMES[p.color]} ${p.sym ? SYMBOL_NAMES[p.sym] : 'blank'}">${p.sym ? SYM_SVG[p.sym] : ''}</div>`;
+  return `<div class="card ${p.red ? 'red' : 'black'} ${extra}"><span class="rank">${RANK_LABELS[p.rank]}</span><span class="suit">${SUITS[p.suit]}</span></div>`;
+}
+export const cardHTML = pieceHTML;
+
+function cardText(p) {
+  return pieceLabel(p);
 }
 
 function fmtTime(sec) {
@@ -309,14 +334,16 @@ export class UI {
     const playing = g.status === 'playing';
     const hints = s.hints && playing && g.current;
     const wardable = playing && s.wardSpend === 'manual' && g.wards > 0;
-    const ghost = g.current ? RANK_LABELS[g.current.rank] + SUITS[g.current.suit] : '';
+    const cur = g.current;
+    const ghost = cur ? (cur.kind === 'tile' ? SYMBOL_GLYPHS[cur.sym] : RANK_LABELS[cur.rank] + SUITS[cur.suit]) : '';
+    const ghostBg = cur && cur.kind === 'tile' ? TILE_COLORS[cur.color] : '';
     for (let i = 0; i < this.cellEls.length; i++) {
       const cell = this.cellEls[i];
       const inner = cell.firstChild;
       const v = g.cells[i];
       const open = g.inBounds(i);
-      const sig = v ? `${v.kind}:${v.rank}:${v.suit}` : 'empty';
-      if (sig !== this.cellSig[i]) { inner.innerHTML = cardHTML(v); this.cellSig[i] = sig; }
+      const sig = v ? `${v.kind}:${v.rank}:${v.suit}:${v.color}:${v.sym}` : 'empty';
+      if (sig !== this.cellSig[i]) { inner.innerHTML = pieceHTML(v); this.cellSig[i] = sig; }
       let cls = 'cell';
       if (!open) cls += ' crushed'; else cls += ' open';
       if (!v) cls += ' empty';
@@ -328,8 +355,12 @@ export class UI {
       }
       if (this.cursor === i) cls += ' cursor';
       cell.className = cls;
-      if (!v && open) { inner.dataset.ghost = ghost; inner.classList.toggle('ghost-red', !!(g.current && g.current.red)); }
-      else { delete inner.dataset.ghost; inner.classList.remove('ghost-red'); }
+      if (!v && open) {
+        inner.dataset.ghost = ghost;
+        inner.classList.toggle('ghost-red', !!(cur && cur.kind === 'card' && cur.red));
+        inner.classList.toggle('ghost-tile', !!ghostBg);
+        if (ghostBg) inner.style.setProperty('--ghost-bg', ghostBg); else inner.style.removeProperty('--ghost-bg');
+      } else { delete inner.dataset.ghost; inner.classList.remove('ghost-red', 'ghost-tile'); inner.style.removeProperty('--ghost-bg'); }
     }
   }
 
@@ -483,7 +514,7 @@ export class UI {
     st.seed.b.textContent = g.seed;
 
     if (g.status === 'playing' && g.current) {
-      this.el.current.innerHTML = cardHTML(g.current, 'bigcard');
+      this.el.current.innerHTML = pieceHTML(g.current, 'bigcard');
     } else if (g.status === 'over') {
       this.el.current.innerHTML = '<div class="placeholder">Game over</div>';
     } else if (g.status === 'levelup') {
@@ -492,10 +523,10 @@ export class UI {
       this.el.current.innerHTML = '<div class="placeholder">—</div>';
     }
     const peek = g.upcoming(s.peekCount);
-    this.el.upcoming.innerHTML = s.peekCount ? peek.map((c) => cardHTML(c, 'smallcard')).join('') : '<span class="hint-text">hidden</span>';
+    this.el.upcoming.innerHTML = s.peekCount ? peek.map((c) => pieceHTML(c, 'smallcard')).join('') : '<span class="hint-text">hidden</span>';
     let hint = '';
     if (g.status === 'playing') {
-      if (g.current) hint = 'Tap an empty cell to place the card.';
+      if (g.current) hint = `Tap an empty cell to place the ${pieceWord(s)}.`;
       if (s.wardSpend === 'manual' && g.wards > 0) {
         const uses = [];
         if (s.wardCostCurse > 0 && g.wards >= s.wardCostCurse && g.curseCells().length) uses.push('tap a glowing curse to remove it');
@@ -552,6 +583,10 @@ export class UI {
           this.toast(`${SIDE_LABEL[ev.side]} wall pushed back${ev.reason === 'ward' ? ' (ward)' : ''}`, 'good');
           this.log(`${SIDE_LABEL[ev.side]} wall pushed back${ev.reason === 'ward' ? ' with a ward' : ''}`, 'good');
           break;
+        case 'goalSwap':
+          this.toast(`${ev.from} no longer fits between the walls; replaced by ${ev.to}`);
+          this.log(`${SIDE_LABEL[ev.side]} goal ${ev.from} no longer fits, replaced by ${ev.to}`);
+          break;
         case 'reroll':
           this.toast(`Goal replaced: ${ev.from} → ${ev.to}`, 'good');
           this.log(`Ward spent: ${SIDE_LABEL[ev.side]} goal ${ev.from} replaced by ${ev.to}`, 'good');
@@ -606,7 +641,7 @@ export class UI {
 
   ghost(idx, card, cls) {
     const [r, c] = this.game.rc(idx);
-    const e = h('div', { class: `ghost ${cls}`, style: `--r:${r};--c:${c}` }, cardHTML(card));
+    const e = h('div', { class: `ghost ${cls}`, style: `--r:${r};--c:${c}` }, pieceHTML(card));
     this.el.fx.appendChild(e);
     setTimeout(() => e.remove(), 720);
   }
@@ -771,8 +806,14 @@ export class UI {
   openHelp() {
     const lines = this.rulesSummary(this.settings);
     this.el.helpBody.className = 'modal-body help-body';
+    const s0 = this.settings;
+    const w = pieceWord(s0);
+    const deckPara = s0.deckType === 'tiles'
+      ? `<p><b>The tiles.</b> ${s0.tileColors} colors (${TILE_COLOR_NAMES.slice(0, s0.tileColors).join(', ')}). Each color has ${s0.tileBlanks} blank tile${s0.tileBlanks === 1 ? '' : 's'}, ${s0.tileDots} with a dot ${SYMBOL_GLYPHS[1]}, ${s0.tileTriangles} with a triangle ${SYMBOL_GLYPHS[2]} and ${s0.tileStars} with a star ${SYMBOL_GLYPHS[3]}: ${s0.tileColors * (s0.tileBlanks + s0.tileDots + s0.tileTriangles + s0.tileStars)} tiles in all, plus ${s0.curseCount} curses. A tile with a symbol is "marked".</p>`
+      : `<p><b>The cards.</b> A standard 52-card deck plus ${s0.curseCount} curses.</p>`;
     this.el.helpBody.innerHTML =
-      `<p>Cards are drawn one at a time. Click an empty cell to place the drawn card. Each of the four walls shows a goal; complete one with the card you just placed and it clears: you score, earn a ward, and the wall draws a new goal. Let a goal's timer run out and that wall crashes inward, crushing whatever sits in its way. Curses in the deck land on random cells and block them until you spend a ward on them. The game ends when a card cannot be placed or the walls close in.</p>` +
+      `<p>${w === 'tile' ? 'Tiles' : 'Cards'} are drawn one at a time. Tap an empty cell to place the drawn ${w}. Each of the four walls shows a goal; complete one with the ${w} you just placed and it clears: you score, earn a ward, and the wall draws a new goal. Let a goal's timer run out and that wall crashes inward, crushing whatever sits in its way. Curses in the deck land on random cells and block them until you spend a ward on them. The game ends when a ${w} cannot be placed or the walls close in.</p>` +
+      deckPara +
       `<h3>Controls</h3><ul>` +
       `<li>Click or tap an empty cell to place the card; hover shows a preview.</li>` +
       `<li>Click a glowing curse to remove it with a ward.</li>` +
@@ -780,12 +821,14 @@ export class UI {
       `<li><kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
       `</ul>` +
       `<h3>Definitions</h3><ul>` +
-      `<li><b>Chain</b>: ${this.settings.chainShape === 'group' ? 'any group of cards connected up/down/left/right, branching allowed.' : 'a snake of cards connected up/down/left/right. It may bend as often as it likes but may not branch (a plus shape is not a chain), and each card is used once.'} Diagonals never connect.</li>` +
-      `<li><b>Straight line</b>: cards side by side in a single row or a single column, no bends.</li>` +
-      `<li><b>Full row / column</b>: every open cell between the current walls holds a card. Curses count as gaps. The line needs at least ${this.settings.lineMinLen} open cell${this.settings.lineMinLen === 1 ? '' : 's'}, and it gets shorter (easier) as the walls close in.</li>` +
-      `<li><b>Pips</b> (for sums): number cards count face value, J/Q/K count 10, aces count 1 (Blackjack also lets an ace be 11).</li>` +
-      `<li><b>Ace</b> in straights: low (A-2-3) or high (Q-K-A), never both (K-A-2 does not count). Ace is 1 for Low Road, Odds and pip sums, and counts as high for High Road.</li>` +
-      `<li>${this.settings.mustIncludePlaced ? 'The card you just placed must be part of the goal you complete.' : 'A goal clears after any placement if the board satisfies it.'} ${this.settings.clearedCardsRemoved ? 'Cleared cards leave the board.' : 'Cleared cards stay on the board.'}</li>` +
+      `<li><b>Chain</b>: ${this.settings.chainShape === 'group' ? `any group of ${w}s connected up/down/left/right, branching allowed.` : `a snake of ${w}s connected up/down/left/right. It may bend as often as it likes but may not branch (a plus shape is not a chain), and each ${w} is used once.`} Diagonals never connect.</li>` +
+      `<li><b>Straight line</b>: ${w}s side by side in a single row or a single column, no bends.</li>` +
+      `<li><b>Full row / column</b>: every open cell between the current walls holds a ${w}. Curses count as gaps. The line needs at least ${this.settings.lineMinLen} open cell${this.settings.lineMinLen === 1 ? '' : 's'}, and it gets shorter (easier) as the walls close in. A goal that can no longer fit between the walls is replaced for free.</li>` +
+      (s0.deckType === 'tiles'
+        ? `<li><b>Block</b>: a 2×2 square of four tiles. <b>Plus</b>: a centre tile and its four side neighbours. <b>Board-wide</b> goals count matching tiles anywhere between the walls and clear all of them at once.</li>`
+        : `<li><b>Pips</b> (for sums): number cards count face value, J/Q/K count 10, aces count 1 (Blackjack also lets an ace be 11).</li>` +
+          `<li><b>Ace</b> in straights: low (A-2-3) or high (Q-K-A), never both (K-A-2 does not count). Ace is 1 for Low Road, Parity and pip sums, and counts as high for High Road.</li>`) +
+      `<li>${this.settings.mustIncludePlaced ? `The ${w} you just placed must be part of the goal you complete.` : 'A goal clears after any placement if the board satisfies it.'} ${this.settings.clearedCardsRemoved ? `Cleared ${w}s leave the board.` : `Cleared ${w}s stay on the board.`}</li>` +
       `</ul>` +
       `<h3>Reading a goal card</h3><p>The badge before the name shows the shape and how many cards it takes:</p><ul class="icon-legend">` +
       `<li><span class="goal-badge shape-snake">${SHAPE_SVG.snake}<span class="goal-count">4</span></span> a connected chain of 4 cards (bends allowed, no branching)</li>` +
@@ -793,11 +836,14 @@ export class UI {
       `<li><span class="goal-badge shape-line">${SHAPE_SVG.line}<span class="goal-count">3</span></span> 3 cards in a straight line, either a row or a column</li>` +
       `<li><span class="goal-badge shape-row">${SHAPE_SVG.row}<span class="goal-count">6</span></span> a whole row between the walls (the number is its current length and shrinks as the walls close in)</li>` +
       `<li><span class="goal-badge shape-col">${SHAPE_SVG.col}<span class="goal-count">6</span></span> a whole column between the walls</li>` +
+      `<li><span class="goal-badge shape-square">${SHAPE_SVG.square}<span class="goal-count">4</span></span> a 2×2 block</li>` +
+      `<li><span class="goal-badge shape-plus">${SHAPE_SVG.plus}<span class="goal-count">5</span></span> a plus: a centre and its four side neighbours</li>` +
+      `<li><span class="goal-badge shape-board">${SHAPE_SVG.board}<span class="goal-count">6</span></span> that many matching ${w}s anywhere on the board</li>` +
       `</ul>` +
       this.wardRulesHTML(this.settings) +
-      `<h3>Goal cards</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}.</p>` +
+      `<h3>Goal cards (${s0.deckType === 'tiles' ? 'tile deck' : 'card deck'})</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}. Switch the deck in Settings to see the other deck's goals.</p>` +
       this.goalListHTML(this.settings) +
-      `<h3>Other cards</h3><dl class="goal-list"><dt>☠ Curse</dt><dd>Not a playing card. When drawn it lands on a random empty cell and blocks it: nothing can be placed there, chains cannot pass through it, and a row or column containing it cannot be completed. Remove it by spending a ward (earned by clearing goals) or let a wall crush it.</dd></dl>` +
+      `<h3>Other cards</h3><dl class="goal-list"><dt>☠ Curse</dt><dd>Not a ${w}. When drawn it lands on a random empty cell and blocks it: nothing can be placed there, chains cannot pass through it, and a row or column containing it cannot be completed. Remove it by spending a ward (earned by clearing goals) or let a wall crush it.</dd></dl>` +
       `<h3>Current rules</h3><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` +
       `<h3>Playtesting tips</h3><ul>` +
       `<li>Turn on <b>Hints</b> to see which cells would clear a goal; gold = one goal, red = two or more.</li>` +
@@ -818,9 +864,11 @@ export class UI {
 
   goalListHTML(s) {
     let html = '';
-    for (const cat of [...new Set(GOAL_DEFS.map((d) => d.cat))]) {
+    const deck = s.deckType || 'cards';
+    const defs = GOAL_DEFS.filter((d) => goalDeck(d) === deck);
+    for (const cat of [...new Set(defs.map((d) => d.cat))]) {
       html += `<h4>${esc(cat)}</h4><dl class="goal-list">`;
-      for (const d of GOAL_DEFS.filter((x) => x.cat === cat)) {
+      for (const d of defs.filter((x) => x.cat === cat)) {
         const on = goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && (typeof d.ordered === 'function' ? d.ordered(s) : !!d.ordered));
         html += `<dt class="${on ? '' : 'off'}">${goalBadgeHTML(d, s, null)}${esc(d.name)} <span class="pts">${goalPoints(d, s)} pts</span>${familyTagsHTML(d)}${on ? '' : ' <span class="offtag">off</span>'}</dt><dd class="${on ? '' : 'off'}">${esc(goalDetail(d, s))}</dd>`;
       }
@@ -832,7 +880,10 @@ export class UI {
   rulesSummary(s) {
     const t = s.clock === 'time';
     const lines = [];
-    lines.push(`Grid ${s.gridW}×${s.gridH}. Deck: 52 cards + ${s.curseCount} curses (${s.curseSpread === 'even' ? 'evenly spaced' : 'randomly shuffled'}). Game over when fewer than ${s.minCells} cells remain between the walls.`);
+    const deckDesc = s.deckType === 'tiles'
+      ? `${s.tileColors * (s.tileBlanks + s.tileDots + s.tileTriangles + s.tileStars)} tiles (${s.tileColors} colors × ${s.tileBlanks} blank, ${s.tileDots} dot, ${s.tileTriangles} triangle, ${s.tileStars} star)`
+      : '52 cards';
+    lines.push(`Grid ${s.gridW}×${s.gridH}. Deck: ${deckDesc} + ${s.curseCount} curses (${s.curseSpread === 'even' ? 'evenly spaced' : 'randomly shuffled'}). Game over when fewer than ${s.minCells} cells remain between the walls.`);
     if (s.wallMode === 'goal') {
       const pen = { wall: 'that wall moves in one step', curse: 'a curse appears', both: 'that wall moves in and a curse appears', none: 'a new goal simply replaces it' }[s.expiredGoalPenalty];
       lines.push(`Each wall's goal lasts ${t ? s.goalSeconds + ' seconds' : s.goalTurns + ' placements'}; when it expires, ${pen}.`);
@@ -840,8 +891,9 @@ export class UI {
       lines.push(`Every ${t ? s.globalSeconds + ' seconds' : s.globalTurns + ' placements'} a wall moves in (${s.globalOrder === 'rotate' ? 'top, right, bottom, left in turn' : 'a random wall'}).`);
     } else lines.push('Walls never move.');
     if (s.wallMode !== 'off' && s.pressureRamp < 1) lines.push(`Timers shrink by ${Math.round((1 - s.pressureRamp) * 100)}% per ${t ? 'minute' : '20 placements'}, down to ${Math.round(s.pressureFloor * 100)}% of the base.`);
-    lines.push(`Chains are ${s.chainShape === 'path' ? 'snake paths (bends allowed, no branching)' : 'any connected group'}. Straights are ${s.straightLen} cards${s.straightOrdered ? ' and must run in order' : ''}; flushes are ${s.flushLen} cards.`);
-    lines.push(`${s.mustIncludePlaced ? 'The card you just placed must be part of the goal you complete.' : 'Any placement clears a goal the board already satisfies.'} ${s.clearedCardsRemoved ? 'Cleared cards leave the board.' : 'Cleared cards stay on the board.'}`);
+    const w = pieceWord(s);
+    lines.push(`Chains are ${s.chainShape === 'path' ? 'snake paths (bends allowed, no branching)' : 'any connected group'}.${s.deckType === 'cards' ? ` Straights are ${s.straightLen} cards${s.straightOrdered ? ' and must run in order' : ''}; flushes are ${s.flushLen} cards.` : ''}`);
+    lines.push(`${s.mustIncludePlaced ? `The ${w} you just placed must be part of the goal you complete.` : 'Any placement clears a goal the board already satisfies.'} ${s.clearedCardsRemoved ? `Cleared ${w}s leave the board.` : `Cleared ${w}s stay on the board.`}`);
     lines.push(`Each clear earns ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'}; ${s.wardSpend === 'manual' ? 'click a curse to spend one' : 'they are spent automatically on a random curse'}.`);
     const perks = [];
     if (s.perkExtraWard) perks.push('an extra ward');
@@ -944,29 +996,43 @@ export class UI {
       const row = this.rowEls[key];
       if (row) row.hidden = !fn(this.draft);
     }
+    const deck = this.draft.deckType || 'cards';
+    for (const row of this.goalRows || []) row.hidden = row.dataset.deck !== deck;
+    for (const [d, el] of Object.entries(this.goalTools || {})) el.hidden = d !== deck;
   }
 
   buildGoalsFieldset() {
     const fs = h('fieldset', { class: 'goals-fs' });
     fs.appendChild(h('legend', { text: 'Goal pool' }));
     fs.appendChild(h('p', { class: 'help-p', text: 'The four walls draw from the enabled goals (no duplicates unless allowed above). Points are the base value for clearing that goal. Rows and columns must be completely filled between the walls.' }));
-    const tools = h('div', { class: 'goal-tools' });
-    const mk = (label, fn) => { const b = h('button', { type: 'button', text: label }); b.onclick = fn; tools.appendChild(b); };
-    mk('All on', () => this.setGoals(() => true));
-    mk('All off', () => this.setGoals(() => false));
-    for (const cat of [...new Set(GOAL_DEFS.map((d) => d.cat))]) {
-      mk(`Toggle ${cat.toLowerCase()}`, () => {
-        const anyOff = GOAL_DEFS.some((d) => d.cat === cat && !this.draft.goalsEnabled[d.id]);
-        this.setGoals((d) => (d.cat === cat ? anyOff : this.draft.goalsEnabled[d.id]));
-      });
+    this.goalTools = {};
+    for (const deck of ['tiles', 'cards']) {
+      const tools = h('div', { class: 'goal-tools', 'data-deck': deck });
+      const mk = (label, fn) => { const b = h('button', { type: 'button', text: label }); b.onclick = fn; tools.appendChild(b); };
+      mk('All on', () => this.setGoals((d) => (goalDeck(d) === deck ? true : this.draft.goalsEnabled[d.id])));
+      mk('All off', () => this.setGoals((d) => (goalDeck(d) === deck ? false : this.draft.goalsEnabled[d.id])));
+      for (const cat of [...new Set(GOAL_DEFS.filter((d) => goalDeck(d) === deck).map((d) => d.cat))]) {
+        mk(`Toggle ${cat.toLowerCase()}`, () => {
+          const anyOff = GOAL_DEFS.some((d) => goalDeck(d) === deck && d.cat === cat && !this.draft.goalsEnabled[d.id]);
+          this.setGoals((d) => (goalDeck(d) === deck && d.cat === cat ? anyOff : this.draft.goalsEnabled[d.id]));
+        });
+      }
+      fs.appendChild(tools);
+      this.goalTools[deck] = tools;
     }
-    fs.appendChild(tools);
     const table = h('table', { class: 'goals' }, '<thead><tr><th>On</th><th>Goal</th><th>Shape</th><th>Family</th><th>Requirement</th><th>Points</th></tr></thead>');
     const tb = h('tbody');
     let lastCat = null;
+    this.goalRows = [];
     for (const d of GOAL_DEFS) {
-      if (d.cat !== lastCat) { lastCat = d.cat; tb.appendChild(h('tr', { class: 'cat' }, `<td colspan="6">${esc(d.cat)}</td>`)); }
-      const tr = h('tr');
+      if (d.cat !== lastCat) {
+        lastCat = d.cat;
+        const catRow = h('tr', { class: 'cat', 'data-deck': goalDeck(d) }, `<td colspan="6">${esc(d.cat)}</td>`);
+        tb.appendChild(catRow);
+        this.goalRows.push(catRow);
+      }
+      const tr = h('tr', { 'data-deck': goalDeck(d) });
+      this.goalRows.push(tr);
       const on = h('input', { type: 'checkbox' });
       const pts = h('input', { type: 'number', min: 0, step: 5, class: 'pts' });
       const desc = h('td', { class: 'desc' });
