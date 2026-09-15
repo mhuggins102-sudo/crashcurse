@@ -74,6 +74,8 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 
 ## Playing
 
+On a phone the whole game fits on one screen: the board in the middle, the drawn tile and quick stats in a tray at the bottom, and everything else behind the ☰ menu (pause, new game, hints, bot, stats & log, rules, settings). The page ships a web manifest and icons, so "Add to Home Screen" installs it full-screen.
+
 - Click an empty cell to place the drawn card (hover previews it).
 - Click a glowing curse to remove it with a ward.
 - Arrow keys move a cursor; Enter/Space acts on it.

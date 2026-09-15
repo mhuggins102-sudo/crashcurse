@@ -2,31 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crash Curse">
+<meta name="description" content="Crash Curse: place numbered tiles on a shrinking grid, complete the goals on the walls, survive the curses.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>Crash Curse</title>
-<meta name="description" content="Crash Curse: place tiles or cards on a shrinking grid, complete the goals on the walls, survive the curses.">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <div class="brand">CRASH CURSE <span class="tag">playtest build</span></div>
-    <div class="topstats">
-      <div class="tstat"><span class="lbl">Score</span><b id="top-score">0</b></div>
-      <div class="tstat"><span class="lbl">Best</span><b id="top-best">0</b></div>
+    <button id="btn-menu" class="icon-btn" data-icon="menu" title="Menu" aria-label="Menu"></button>
+    <div class="brand" title="Crash Curse"><span class="b1">CRASH</span><span class="b2">CURSE</span></div>
+    <div class="top-score"><span class="lbl">Score</span><b id="top-score">0</b></div>
+    <div class="top-best"><span class="lbl">Best</span><b id="top-best">0</b></div>
+    <div class="spacer"></div>
+    <div class="top-actions">
+      <button id="btn-new" class="icon-btn" data-icon="new" title="New game (N)" aria-label="New game"></button>
+      <button id="btn-hints" class="icon-btn toggle" data-icon="hints" title="Hints (H)" aria-label="Hints"></button>
+      <button id="btn-bot" class="icon-btn toggle" data-icon="bot" title="Bot autoplay (B)" aria-label="Bot autoplay"></button>
+      <button id="btn-help" class="icon-btn" data-icon="help" title="How to play" aria-label="How to play"></button>
+      <button id="btn-settings" class="icon-btn" data-icon="settings" title="Settings" aria-label="Settings"></button>
     </div>
-    <div class="topbtns">
-      <button id="btn-new" title="N">New game</button>
-      <button id="btn-pause" title="P">Pause</button>
-      <button id="btn-bot" title="B">Bot: off</button>
-      <button id="btn-hints" title="H">Hints: off</button>
-      <button id="btn-help">Rules</button>
-      <button id="btn-settings" class="primary">Settings</button>
-    </div>
+    <button id="btn-pause" class="icon-btn" data-icon="pause" title="Pause (P)" aria-label="Pause"></button>
   </header>
 
   <main class="layout">
-    <section class="arena-wrap">
+    <section class="arena-wrap" id="arena-wrap">
       <div class="arena" id="arena">
         <div class="grid" id="grid"></div>
         <div class="fx" id="fx"></div>
@@ -38,23 +46,36 @@
       </div>
     </section>
 
-    <aside class="hud">
-      <div class="hand">
-        <div class="hand-current">
-          <div class="lbl">Drawn</div>
+    <aside class="hud" id="hud">
+      <div class="tray">
+        <div class="tray-current">
           <div id="current" class="current"></div>
           <div id="placement-timer" class="mini-bar" hidden><div class="fill"></div></div>
         </div>
-        <div class="hand-next">
+        <div class="tray-next">
           <div class="lbl">Next</div>
           <div id="upcoming" class="upcoming"></div>
-          <div class="hint-text" id="hint-text"></div>
         </div>
+        <div class="tray-chips" id="chips" role="button" title="Stats & log"></div>
       </div>
-      <div class="stats" id="stats"></div>
-      <div class="log-wrap"><div class="lbl">Log</div><ul id="log" class="log"></ul></div>
+      <div class="hud-more" id="hud-more">
+        <div class="hint-text" id="hint-text"></div>
+        <div class="stats" id="stats"></div>
+        <div class="log-wrap"><div class="lbl">Log</div><ul id="log" class="log"></ul></div>
+      </div>
     </aside>
   </main>
+
+  <div class="sheet-backdrop" id="menu" hidden>
+    <nav class="sheet" id="menu-sheet" aria-label="Menu"></nav>
+  </div>
+
+  <div class="modal" id="modal-stats" hidden>
+    <div class="modal-box narrow-box">
+      <div class="modal-head"><h2>Stats &amp; log</h2><button id="stats-close" class="icon-btn" data-icon="close" title="Close" aria-label="Close"></button></div>
+      <div class="modal-body" id="stats-body"></div>
+    </div>
+  </div>
 
   <div class="modal" id="modal-overlay" hidden><div class="modal-box small" id="overlay-box"></div></div>
 
@@ -62,7 +83,7 @@
     <div class="modal-box" id="settings-box">
       <div class="modal-head">
         <h2>Settings</h2>
-        <button id="settings-close" title="Close">✕</button>
+        <button id="settings-close" class="icon-btn" data-icon="close" title="Close" aria-label="Close"></button>
       </div>
       <div class="modal-body" id="settings-body"></div>
       <div class="modal-foot">
@@ -76,7 +97,7 @@
 
   <div class="modal" id="modal-help" hidden>
     <div class="modal-box">
-      <div class="modal-head"><h2>How to play</h2><button id="help-close" title="Close">✕</button></div>
+      <div class="modal-head"><h2>How to play</h2><button id="help-close" class="icon-btn" data-icon="close" title="Close" aria-label="Close"></button></div>
       <div class="modal-body" id="help-body"></div>
     </div>
   </div>

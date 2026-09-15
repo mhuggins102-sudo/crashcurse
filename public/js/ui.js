@@ -75,6 +75,26 @@ const SHAPE_SVG = {
   plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5h5v4h4v5h-4v4h-5v-4h-4v-5h4z" fill="currentColor"/></svg>',
   board: '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.6"/><circle cx="8" cy="3" r="1.6"/><circle cx="13" cy="3" r="1.6"/><circle cx="3" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13" cy="8" r="1.6"/><circle cx="3" cy="13" r="1.6"/><circle cx="8" cy="13" r="1.6"/><circle cx="13" cy="13" r="1.6"/></g></svg>',
 };
+const ICONS = {
+  menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>',
+  new: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  hints: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  bot: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="16" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8V4M9 4h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="13.5" r="1.5" fill="currentColor"/><circle cx="15" cy="13.5" r="1.5" fill="currentColor"/></svg>',
+  help: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8v.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M4 12h2M10 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="12" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+  stats: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V11M12 19V5M19 19v-8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  ward: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 6.3L21 10l-6.8 1.7L12 18l-2.2-6.3L3 10l6.8-1.7z" fill="currentColor"/></svg>',
+  deck: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="13" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 4h11a2 2 0 0 1 2 2v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  turns: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+  level: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  combo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 9-13h-6z" fill="currentColor"/></svg>',
+  curse: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.4 4.3 3 5.3V19a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-3.7c1.6-1 3-2.7 3-5.3a7 7 0 0 0-7-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="11" r="1.5" fill="currentColor"/><circle cx="14.5" cy="11" r="1.5" fill="currentColor"/></svg>',
+};
+
 const ICON_REPLACE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-9.6 3.7M2.5 8a5.5 5.5 0 0 1 9.6-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.6 1.6v3.2H9.4M3.4 14.4v-3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_EXTEND = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 5.5v3l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -178,7 +198,9 @@ export class UI {
   // ---------- setup ----------
   cacheEls() {
     this.el = {
-      arena: $('arena'), grid: $('grid'), fx: $('fx'), pops: $('pops'),
+      arena: $('arena'), arenaWrap: $('arena-wrap'), hud: $('hud'), hudMore: $('hud-more'), chips: $('chips'),
+      menu: $('menu'), menuSheet: $('menu-sheet'), btnMenu: $('btn-menu'), statsModal: $('modal-stats'), statsBody: $('stats-body'),
+      grid: $('grid'), fx: $('fx'), pops: $('pops'),
       wall: Object.fromEntries(SIDES.map((s) => [s, $('wall-' + s)])),
       goal: Object.fromEntries(SIDES.map((s) => [s, $('wall-' + s).querySelector('.goal')])),
       current: $('current'), upcoming: $('upcoming'), hintText: $('hint-text'), placementTimer: $('placement-timer'),
@@ -203,6 +225,17 @@ export class UI {
   }
 
   bindGlobal() {
+    for (const b of document.querySelectorAll('[data-icon]')) b.innerHTML = ICONS[b.dataset.icon] || '';
+    this.el.btnMenu.onclick = (e) => { e.stopPropagation(); this.openMenu(); };
+    this.el.menu.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-menu]');
+      if (!item) { if (e.target === this.el.menu) this.closeMenu(); return; }
+      this.closeMenu();
+      this.menuAction(item.dataset.menu);
+    });
+    this.el.chips.onclick = () => this.openStats();
+    $('stats-close').onclick = () => this.closeStats();
+    this.el.statsModal.addEventListener('click', (e) => { if (e.target === this.el.statsModal) this.closeStats(); });
     this.el.btnNew.onclick = () => this.newGame();
     this.el.btnPause.onclick = () => this.togglePause();
     this.el.btnBot.onclick = () => this.toggleBot();
@@ -236,6 +269,7 @@ export class UI {
     document.addEventListener('keydown', (e) => this.onKey(e));
     window.addEventListener('resize', () => { if (this.game) { this.computeSize(); } });
     window.addEventListener('orientationchange', () => { if (this.game) { this.computeSize(); } });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { if (this.game) this.computeSize(); }).observe(this.el.arenaWrap);
     // Mobile browsers can report a provisional viewport before the meta tag settles.
     window.addEventListener('load', () => { if (this.game) { this.computeSize(); } });
     requestAnimationFrame(() => { if (this.game) this.computeSize(); });
@@ -255,7 +289,6 @@ export class UI {
     this.el.log.innerHTML = '';
     this.el.fx.innerHTML = '';
     this.el.pops.innerHTML = '';
-    this.el.btnPause.textContent = 'Pause';
     this.hideGoalPopup();
     this.buildGrid();
     this.buildHud();
@@ -292,16 +325,18 @@ export class UI {
   computeSize() {
     const g = this.game;
     const vw = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth);
-    const vh = window.innerHeight;
-    const sideBySide = vw > 980;
-    const availW = sideBySide ? vw - 32 - 300 - 24 : vw - 24;
-    const availH = Math.max(320, vh - 96);
+    // Phone-style layout below 760px: tray at the bottom, everything else behind the menu.
+    const narrowLayout = vw < 760;
+    this.setNarrow(narrowLayout);
+    const wrap = this.el.arenaWrap;
+    const availW = Math.max(220, (wrap.clientWidth || vw) - 8);
+    const availH = Math.max(220, (wrap.clientHeight || window.innerHeight - 160) - 8);
     const narrow = availW < 600;
-    const wallLR = narrow ? 80 : 124;
-    const wallTB = narrow ? 88 : 104;
+    const wallLR = narrow ? 76 : 124;
+    const wallTB = narrow ? 84 : 104;
     let cell = Math.floor((availW - 2 * wallLR) / g.W);
     cell = Math.min(cell, Math.floor((availH - 2 * wallTB) / g.H), 60);
-    cell = Math.max(cell, 26);
+    cell = Math.max(cell, 24);
     const a = this.el.arena;
     a.style.setProperty('--cell', cell + 'px');
     a.style.setProperty('--wall-lr', wallLR + 'px');
@@ -310,6 +345,59 @@ export class UI {
     a.style.setProperty('--rows', g.H);
     a.classList.toggle('narrow', narrow || cell < 40);
     this.cell = cell;
+    document.documentElement.style.setProperty('--tray-h', (this.el.hud.offsetHeight || 92) + 'px');
+  }
+
+  // Phone layout: the detailed stats and the log live in a popup instead of a side panel.
+  setNarrow(narrow) {
+    if (this.narrow === narrow) return;
+    this.narrow = narrow;
+    document.body.classList.toggle('narrow', narrow);
+    if (narrow) { if (this.el.hudMore.parentElement !== this.el.statsBody) this.el.statsBody.appendChild(this.el.hudMore); }
+    else if (this.el.statsModal.hidden && this.el.hudMore.parentElement !== this.el.hud) this.el.hud.appendChild(this.el.hudMore);
+  }
+
+  // ---------- menu sheet & stats popup ----------
+  openMenu() {
+    this.hideGoalPopup();
+    const g = this.game, s = this.settings;
+    const item = (key, icon, label, state = '', on = false) =>
+      `<button type="button" class="sheet-item${on ? ' on' : ''}" data-menu="${key}">${ICONS[icon]}<span>${label}</span>${state ? `<span class="state">${esc(state)}</span>` : ''}</button>`;
+    const playing = g && g.status === 'playing';
+    this.el.menuSheet.innerHTML =
+      item('pause', this.paused ? 'play' : 'pause', this.paused ? 'Resume' : 'Pause', playing ? '' : 'not playing') +
+      item('new', 'new', 'New game') +
+      `<div class="sheet-sep"></div>` +
+      item('hints', 'hints', 'Hints', s.hints ? 'on' : 'off', s.hints) +
+      item('bot', 'bot', 'Bot autoplay', this.bot ? 'on' : 'off', this.bot) +
+      `<div class="sheet-sep"></div>` +
+      item('stats', 'stats', 'Stats & log', g ? `score ${g.score}` : '') +
+      item('help', 'help', 'How to play') +
+      item('settings', 'settings', 'Settings');
+    this.el.menu.hidden = false;
+  }
+
+  closeMenu() { this.el.menu.hidden = true; }
+
+  menuAction(key) {
+    if (key === 'pause') this.togglePause();
+    else if (key === 'new') this.newGame();
+    else if (key === 'hints') this.toggleHints();
+    else if (key === 'bot') this.toggleBot();
+    else if (key === 'stats') this.openStats();
+    else if (key === 'help') this.openHelp();
+    else if (key === 'settings') this.openSettings();
+  }
+
+  openStats() {
+    this.hideGoalPopup();
+    if (this.el.hudMore.parentElement !== this.el.statsBody) this.el.statsBody.appendChild(this.el.hudMore);
+    this.el.statsModal.hidden = false;
+  }
+
+  closeStats() {
+    this.el.statsModal.hidden = true;
+    if (!this.narrow && this.el.hudMore.parentElement !== this.el.hud) this.el.hud.appendChild(this.el.hudMore);
   }
 
   buildHud() {
@@ -335,6 +423,40 @@ export class UI {
     }
     this.stat.seed.b.title = 'Click to copy the seed';
     this.stat.seed.b.onclick = () => { navigator.clipboard?.writeText(this.game.seed); this.toast('Seed copied'); };
+
+    // Compact chips shown next to the drawn tile (the whole row opens the stats popup).
+    const chips = [
+      ['wards', 'ward', 'Wards'], ['deck', 'deck', 'Tiles left in the deck · curses among them'],
+      ['time', s.clock === 'time' ? 'clock' : 'turns', s.clock === 'time' ? 'Time' : 'Tiles placed'],
+      ['level', 'level', 'Level · time left', s.mode === 'survival'],
+      ['global', 'clock', 'Next wall in', s.wallMode === 'global'],
+      ['combo', 'combo', 'Combo'],
+    ];
+    this.el.chips.innerHTML = '';
+    this.chip = {};
+    for (const [key, icon, title, show = true] of chips) {
+      if (!show) continue;
+      const c = h('span', { class: 'chip', title }, ICONS[icon] + '<b></b>');
+      this.el.chips.appendChild(c);
+      this.chip[key] = { el: c, b: c.querySelector('b') };
+    }
+  }
+
+  renderChips() {
+    const g = this.game, s = this.settings, c = this.chip;
+    if (!c) return;
+    c.wards.b.textContent = s.wardSpend === 'manual' ? g.wards : 'auto';
+    c.wards.el.classList.toggle('hot', s.wardSpend === 'manual' && g.wards > 0);
+    c.deck.b.innerHTML = `${g.deck.length}${s.showCursesInDeck ? ` <small>☠${g.cursesInDeck()}</small>` : ''}`;
+    c.time.b.textContent = s.clock === 'time' ? fmtTime(g.elapsed) : g.placements;
+    if (c.level) {
+      c.level.b.textContent = `${g.level} · ${s.clock === 'time' ? fmtTime(g.levelLeft) : g.levelLeft}`;
+      c.level.el.classList.toggle('warn', s.clock === 'time' ? g.levelLeft < 10 : g.levelLeft <= 3);
+    }
+    if (c.global) c.global.b.textContent = s.clock === 'time' ? `${Math.ceil(g.globalLeft)}s` : `${g.globalLeft}`;
+    const mult = 1 + g.combo * s.comboBonus;
+    c.combo.el.hidden = !(s.comboEnabled && g.combo > 0);
+    c.combo.b.textContent = `×${mult.toFixed(2).replace(/\.?0+$/, '')}`;
   }
 
   // ---------- rendering ----------
@@ -543,6 +665,7 @@ export class UI {
       st.levelTime.el.classList.toggle('warn', s.clock === 'time' && g.levelLeft < 10);
     }
     if (st.global) st.global.b.textContent = s.clock === 'time' ? `${Math.ceil(g.globalLeft)}s` : `${g.globalLeft} turns`;
+    this.renderChips();
     const pt = this.el.placementTimer;
     if (s.placementSeconds > 0 && s.clock === 'time' && g.current && g.status === 'playing') {
       pt.hidden = false;
@@ -592,10 +715,11 @@ export class UI {
       }
     }
     this.el.hintText.textContent = hint;
-    this.el.btnBot.textContent = `Bot: ${this.bot ? 'on' : 'off'}`;
     this.el.btnBot.classList.toggle('on', this.bot);
-    this.el.btnHints.textContent = `Hints: ${s.hints ? 'on' : 'off'}`;
     this.el.btnHints.classList.toggle('on', s.hints);
+    this.el.btnPause.innerHTML = ICONS[this.paused ? 'play' : 'pause'];
+    this.el.btnPause.title = this.paused ? 'Resume (P)' : 'Pause (P)';
+    this.renderChips();
   }
 
   // ---------- events → feedback ----------
@@ -690,8 +814,9 @@ export class UI {
   toast(msg, kind = '') {
     const t = h('div', { class: `toast ${kind}`, text: msg });
     this.el.toasts.appendChild(t);
-    while (this.el.toasts.children.length > 4) this.el.toasts.firstChild.remove();
-    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, 2300);
+    const max = this.narrow ? 2 : 4;
+    while (this.el.toasts.children.length > max) this.el.toasts.firstChild.remove();
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, this.narrow ? 1900 : 2300);
   }
 
   log(msg, kind = '') {
@@ -758,6 +883,8 @@ export class UI {
     const k = e.key;
     if (k === 'Escape') {
       if (this.goalPop) { this.hideGoalPopup(); return; }
+      if (!this.el.menu.hidden) { this.closeMenu(); return; }
+      if (!this.el.statsModal.hidden) { this.closeStats(); return; }
       if (!this.el.settings.hidden) this.closeSettings();
       else if (!this.el.help.hidden) this.el.help.hidden = true;
       else this.togglePause();
@@ -792,7 +919,7 @@ export class UI {
     const g = this.game;
     if (!g || g.status !== 'playing') return;
     this.paused = !this.paused;
-    this.el.btnPause.textContent = this.paused ? 'Resume' : 'Pause';
+    this.el.btnPause.innerHTML = ICONS[this.paused ? 'play' : 'pause'];
     if (this.paused) this.showOverlay('<h2>Paused</h2><p class="reason">Press P, Escape or the button to resume.</p><div class="btnrow"><button class="primary" data-action="resume">Resume</button><button data-action="new">New game</button></div>');
     else this.hideOverlay();
   }
@@ -814,7 +941,7 @@ export class UI {
   // ---------- overlays ----------
   showOverlay(html) { this.el.overlayBox.innerHTML = html; this.el.overlay.hidden = false; }
   hideOverlay() { this.el.overlay.hidden = true; }
-  modalOpen() { return !this.el.settings.hidden || !this.el.help.hidden; }
+  modalOpen() { return !this.el.settings.hidden || !this.el.help.hidden || !this.el.menu.hidden || !this.el.statsModal.hidden; }
 
   showLevelUp(ev) {
     const s = this.settings;
@@ -861,7 +988,7 @@ export class UI {
       `<div class="over-goals">Cleared / offered: ${esc(goalLines) || 'no goals'}</div>` +
       `<div class="btnrow"><button class="primary" data-action="new">New game</button><button data-action="settings">Settings</button><button data-action="close">Look at the board</button></div>`
     );
-    this.el.btnPause.textContent = 'Pause';
+    this.el.btnPause.innerHTML = ICONS.pause;
   }
 
   // ---------- help ----------
