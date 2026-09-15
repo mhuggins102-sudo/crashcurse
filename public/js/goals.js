@@ -1,6 +1,7 @@
 // Goal registry and detection glue for both decks (cards and tiles).
 import { CARD_GOALS, CARD_DETAILS } from './cardgoals.js';
 import { TILE_GOALS, TILE_DETAILS } from './tilegoals.js';
+import { NUM_GOALS, NUM_DETAILS } from './numgoals.js';
 import {
   isPiece, rowIdxs, colIdxs, openRows, openCols, openRowCount, openColCount,
   pathsThrough, allPaths, groupsThrough, allGroups, segmentsThrough, allSegments,
@@ -10,23 +11,28 @@ import {
 export * from './shapes.js';
 
 export const SIDES = ['top', 'right', 'bottom', 'left'];
-export const GOAL_DEFS = [...CARD_GOALS, ...TILE_GOALS];
+export const GOAL_DEFS = [...CARD_GOALS, ...TILE_GOALS, ...NUM_GOALS];
 export const GOAL_BY_ID = Object.fromEntries(GOAL_DEFS.map((d) => [d.id, d]));
-export const GOAL_DETAILS = { ...CARD_DETAILS, ...TILE_DETAILS };
+export const GOAL_DETAILS = { ...CARD_DETAILS, ...TILE_DETAILS, ...NUM_DETAILS };
 
 export const FAMILY_LABEL = {
   match: 'Matching', run: 'Runs', suit: 'Suits', sum: 'Sums', color: 'Colors', tier: 'Rank tiers', variety: 'Variety', fill: 'Filling',
   mono: 'One color', rainbow: 'Many colors', symbol: 'Symbols', blank: 'Blanks', marked: 'Marked', pattern: 'Patterns', block: 'Blocks', board: 'Board-wide',
+  product: 'Products', parity: 'Odds & evens', property: 'Number tricks',
 };
 
 export function goalDeck(def) { return def.deck || 'cards'; }
 export function goalFamilies(def) { return def.family || []; }
-export function pieceWord(s) { return s.deckType === 'tiles' ? 'tile' : 'card'; }
+export function pieceWord(s) { return s.deckType === 'cards' ? 'card' : 'tile'; }
+
+export function goalCount(def, s) {
+  return typeof def.count === 'function' ? def.count(s) : (def.count || 0);
+}
 
 export function goalSizeRange(def, s) {
   if (def.shape === 'square') return [4, 4];
   if (def.shape === 'plus') return [5, 5];
-  if (def.shape === 'board') return [def.count || 0, def.count || 0];
+  if (def.shape === 'board') { const c = goalCount(def, s); return [c, c]; }
   const sz = typeof def.size === 'function' ? def.size(s) : def.size;
   if (Array.isArray(sz)) return sz;
   if (sz == null) return [0, 0];
@@ -65,6 +71,7 @@ export function goalMinLen(def, s) {
 export function goalFeasible(def, s, b) {
   const rows = openRowCount(b), cols = openColCount(b);
   if (rows <= 0 || cols <= 0) return false;
+  if (typeof def.feasible === 'function' && !def.feasible(s, b)) return false;
   const area = rows * cols;
   const [minN] = goalSizeRange(def, s);
   switch (def.shape) {
@@ -75,7 +82,7 @@ export function goalFeasible(def, s, b) {
     case 'rowcol': return cols >= goalMinLen(def, s) || rows >= goalMinLen(def, s);
     case 'square': return rows >= 2 && cols >= 2;
     case 'plus': return rows >= 3 && cols >= 3;
-    case 'board': return (def.count || 0) <= area;
+    case 'board': return goalCount(def, s) <= area;
     default: return true;
   }
 }

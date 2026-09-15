@@ -1,7 +1,7 @@
 # Crash Curse
 
-A grid puzzle prototype built for playtesting. A deck of tiles (or, optionally,
-a standard 52-card deck) is mixed with curse cards. Each turn you draw a piece
+A grid puzzle prototype built for playtesting. A deck of numbered tiles (or,
+optionally, symbol tiles or a standard 52-card deck) is mixed with curse cards. Each turn you draw a piece
 and place it anywhere on the grid. The four walls around the grid each show a
 goal: a pattern made from a bendy chain of pieces, a straight line, a full
 row or column, a 2×2 block, a plus shape, or a board-wide count. Complete a
@@ -9,12 +9,19 @@ goal with the piece you just placed and it clears: you score, earn a ward,
 and the wall draws a new goal. Let a goal expire and its wall crashes inward,
 crushing whatever is in its way, until nothing can be placed.
 
-**The tile deck** (default): 5 colors × 10 tiles = 50 tiles. Each color has 5
-blank tiles, 2 with a dot, 2 with a triangle and 1 with a star. The colors,
-the counts per color and the number of curses are all settings. About 54 tile
-goals ship in six categories (color chains, rainbow chains, symbol chains,
-straight lines, full rows & columns, blocks & patterns, board-wide); the
-playing-card deck keeps its own 30 goals.
+**Three decks**, each with its own goal pool (Settings → Deck):
+
+- **Numbered tiles** (default): 5 colors × the numbers 1–9, one of each, 45
+  tiles. Colors, top number and copies per tile are sliders. 69 goals in ten
+  categories: sums (Sum 10/15/21/30, Featherweight, Heavyweight), products
+  (12, 24, 36, 48, 72, 100, Round Product), runs (any order, Staircase, Skip
+  Run, Doubling, Color Run, Rainbow Run), colors, poker hands, odds & evens,
+  number tricks (Primes, Perfect Squares, Triples, Nine Lives…), full rows &
+  columns (Sorted, Round, Light, Heavy, Twenty Column…), blocks & shapes
+  (Twenty Block, Balanced Block, Summit, Valley…) and board-wide counts.
+- **Symbol tiles**: 5 colors × (5 blank, 2 dot, 2 triangle, 1 star), 50 tiles,
+  56 goals.
+- **Playing cards**: the standard 52, 29 goals.
 
 Every rule that could be a knob is a knob: the **Settings** panel exposes
 about 60 sliders, toggles and selects plus a per-goal on/off + points table,
@@ -77,7 +84,7 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Piece | Default | Where to tune |
 | --- | --- | --- |
 | Grid | 6×6, game over below 4 open cells | Board |
-| Deck | tiles (5 colors × 5 blank + 2 dot + 2 triangle + 1 star) or 52 cards, plus 6 curses; discards reshuffle back in | Deck & curses |
+| Deck | numbered tiles (5 colors × 1–9), symbol tiles, or 52 cards, plus 6 curses; discards reshuffle back in | Deck & curses |
 | Chains | snake paths (bends, no branching); for cards, straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
 | Walls | each wall's goal has 40 s; expiry moves that wall in; timers shrink 10 % per minute | Walls & timing |
@@ -86,7 +93,7 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |
 
-Presets (Chill, Action, Brutal, Turn-based, Global timer, Survival, Playing cards, Poker only)
+Presets (Chill, Action, Brutal, Turn-based, Global timer, Survival, Number tiles, Symbol tiles, Playing cards, Poker only)
 are starting points; load one, tweak, apply.
 
 ### Goal shapes
@@ -109,7 +116,7 @@ public/
   js/rng.js                        seeded RNG (a seed reproduces a whole game)
   js/cards.js                      card model
   js/shapes.js                     chain / line / row / block / plus enumerators
-  js/cardgoals.js, js/tilegoals.js goal definitions for each deck
+  js/cardgoals.js, js/tilegoals.js, js/numgoals.js   goal definitions for each deck
   js/goals.js                      goal registry, feasibility and detection glue
   js/settings.js                   settings schema, defaults, presets, persistence
   js/engine.js                     pure game engine (no DOM), drives everything
@@ -119,4 +126,4 @@ tests/                             node:test suites for detection and engine
 scripts/sim.js                     CLI simulation
 ```
 
-Adding a goal is one entry in `TILE_GOALS` or `CARD_GOALS` (shape, size, family, points, predicate, plus a sentence in the details map); adding a setting is one entry in `SETTINGS_SCHEMA`. The panel, presets, JSON export and validation pick it up automatically.
+Adding a goal is one entry in `NUM_GOALS`, `TILE_GOALS` or `CARD_GOALS` (shape, size, family, points, predicate, plus a sentence in the details map); adding a setting is one entry in `SETTINGS_SCHEMA`. The panel, presets, JSON export and validation pick it up automatically.

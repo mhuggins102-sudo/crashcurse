@@ -2,7 +2,7 @@
 // The UI, the bot and the tests all drive this class.
 
 import { makeRng, hashSeed, randomSeedString } from './rng.js';
-import { makeCard, makeTile, makeCurse, pieceKey } from './cards.js';
+import { makeCard, makeTile, makeNum, makeCurse, pieceKey } from './cards.js';
 import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies, goalFeasible, goalDeck } from './goals.js';
 
 export const OVER_REASONS = {
@@ -106,8 +106,24 @@ export class Game {
     return out;
   }
 
+  // Numbered tiles: every color carries the numbers 1..numMax, numCopies times.
+  numPieces() {
+    const s = this.s;
+    const need = new Map();
+    for (let color = 0; color < s.numColors; color++) for (let n = 1; n <= s.numMax; n++) need.set(color * 16 + n, s.numCopies);
+    for (const c of this.cells) {
+      if (!c || c.kind !== 'num') continue;
+      const k = pieceKey(c);
+      if ((need.get(k) || 0) > 0) need.set(k, need.get(k) - 1);
+    }
+    const out = [];
+    for (const [k, n] of need) for (let i = 0; i < n; i++) out.push(makeNum(k >> 4, k & 15, this.nextId++));
+    return out;
+  }
+
   buildDeck() {
-    const cards = this.s.deckType === 'tiles' ? this.tilePieces() : this.cardPieces();
+    const t = this.s.deckType;
+    const cards = t === 'tiles' ? this.tilePieces() : t === 'num' ? this.numPieces() : this.cardPieces();
     this.rng.shuffle(cards);
     const nCurse = Math.max(0, Math.min(this.curseCount, 60));
     if (this.s.curseSpread === 'even' && nCurse > 0 && cards.length > 0) {

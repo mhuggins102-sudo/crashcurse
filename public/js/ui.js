@@ -15,10 +15,13 @@ const SIDE_LABEL = { top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left' 
 const SIDE_ARROW = { top: '▲', right: '▶', bottom: '▼', left: '◀' };
 const MULTI_WORDS = ['', '', 'DOUBLE', 'TRIPLE', 'QUADRUPLE'];
 const BEST_KEY = 'crashcurse.best.v1';
-const DESC_KEYS = new Set(['straightLen', 'flushLen', 'straightOrdered', 'lineLowAvg', 'lineHighAvg', 'chainShape', 'tileColors', 'deckType', 'lineMinLen']);
+const DESC_KEYS = new Set(['straightLen', 'flushLen', 'straightOrdered', 'lineLowAvg', 'lineHighAvg', 'chainShape', 'tileColors', 'deckType', 'lineMinLen', 'numColors', 'numMax', 'numCopies']);
 
 // Rows of the settings form that only matter for some combinations.
 const ROW_VISIBLE = {
+  numColors: (d) => d.deckType === 'num',
+  numMax: (d) => d.deckType === 'num',
+  numCopies: (d) => d.deckType === 'num',
   tileColors: (d) => d.deckType === 'tiles',
   tileBlanks: (d) => d.deckType === 'tiles',
   tileDots: (d) => d.deckType === 'tiles',
@@ -124,6 +127,7 @@ export function pieceHTML(p, extra = '') {
   if (!p) return '';
   if (p.kind === 'curse') return `<div class="curse ${extra}">☠</div>`;
   if (p.kind === 'tile') return `<div class="tile tc${p.color} ${extra}" title="${TILE_COLOR_NAMES[p.color]} ${p.sym ? SYMBOL_NAMES[p.sym] : 'blank'}">${p.sym ? SYM_SVG[p.sym] : ''}</div>`;
+  if (p.kind === 'num') return `<div class="numtile tc${p.color} ${extra}" title="${TILE_COLOR_NAMES[p.color]} ${p.n}"><span>${p.n}</span></div>`;
   return `<div class="card ${p.red ? 'red' : 'black'} ${extra}"><span class="rank">${RANK_LABELS[p.rank]}</span><span class="suit">${SUITS[p.suit]}</span></div>`;
 }
 export const cardHTML = pieceHTML;
@@ -335,14 +339,14 @@ export class UI {
     const hints = s.hints && playing && g.current;
     const wardable = playing && s.wardSpend === 'manual' && g.wards > 0;
     const cur = g.current;
-    const ghost = cur ? (cur.kind === 'tile' ? SYMBOL_GLYPHS[cur.sym] : RANK_LABELS[cur.rank] + SUITS[cur.suit]) : '';
-    const ghostBg = cur && cur.kind === 'tile' ? TILE_COLORS[cur.color] : '';
+    const ghost = cur ? (cur.kind === 'tile' ? SYMBOL_GLYPHS[cur.sym] : cur.kind === 'num' ? String(cur.n) : RANK_LABELS[cur.rank] + SUITS[cur.suit]) : '';
+    const ghostBg = cur && (cur.kind === 'tile' || cur.kind === 'num') ? TILE_COLORS[cur.color] : '';
     for (let i = 0; i < this.cellEls.length; i++) {
       const cell = this.cellEls[i];
       const inner = cell.firstChild;
       const v = g.cells[i];
       const open = g.inBounds(i);
-      const sig = v ? `${v.kind}:${v.rank}:${v.suit}:${v.color}:${v.sym}` : 'empty';
+      const sig = v ? `${v.kind}:${v.rank}:${v.suit}:${v.color}:${v.sym}:${v.n}` : 'empty';
       if (sig !== this.cellSig[i]) { inner.innerHTML = pieceHTML(v); this.cellSig[i] = sig; }
       let cls = 'cell';
       if (!open) cls += ' crushed'; else cls += ' open';
@@ -808,7 +812,9 @@ export class UI {
     this.el.helpBody.className = 'modal-body help-body';
     const s0 = this.settings;
     const w = pieceWord(s0);
-    const deckPara = s0.deckType === 'tiles'
+    const deckPara = s0.deckType === 'num'
+      ? `<p><b>The tiles.</b> ${s0.numColors} colors (${TILE_COLOR_NAMES.slice(0, s0.numColors).join(', ')}), each carrying the numbers 1 to ${s0.numMax}${s0.numCopies > 1 ? `, ${s0.numCopies} copies of each` : ', one of each'}: ${s0.numColors * s0.numMax * s0.numCopies} tiles in all, plus ${s0.curseCount} curses. Sums and products use the printed numbers; runs are consecutive numbers in any order unless the goal says "in order".</p>`
+      : s0.deckType === 'tiles'
       ? `<p><b>The tiles.</b> ${s0.tileColors} colors (${TILE_COLOR_NAMES.slice(0, s0.tileColors).join(', ')}). Each color has ${s0.tileBlanks} blank tile${s0.tileBlanks === 1 ? '' : 's'}, ${s0.tileDots} with a dot ${SYMBOL_GLYPHS[1]}, ${s0.tileTriangles} with a triangle ${SYMBOL_GLYPHS[2]} and ${s0.tileStars} with a star ${SYMBOL_GLYPHS[3]}: ${s0.tileColors * (s0.tileBlanks + s0.tileDots + s0.tileTriangles + s0.tileStars)} tiles in all, plus ${s0.curseCount} curses. A tile with a symbol is "marked".</p>`
       : `<p><b>The cards.</b> A standard 52-card deck plus ${s0.curseCount} curses.</p>`;
     this.el.helpBody.innerHTML =
@@ -824,7 +830,7 @@ export class UI {
       `<li><b>Chain</b>: ${this.settings.chainShape === 'group' ? `any group of ${w}s connected up/down/left/right, branching allowed.` : `a snake of ${w}s connected up/down/left/right. It may bend as often as it likes but may not branch (a plus shape is not a chain), and each ${w} is used once.`} Diagonals never connect.</li>` +
       `<li><b>Straight line</b>: ${w}s side by side in a single row or a single column, no bends.</li>` +
       `<li><b>Full row / column</b>: every open cell between the current walls holds a ${w}. Curses count as gaps. The line needs at least ${this.settings.lineMinLen} open cell${this.settings.lineMinLen === 1 ? '' : 's'}, and it gets shorter (easier) as the walls close in. A goal that can no longer fit between the walls is replaced for free.</li>` +
-      (s0.deckType === 'tiles'
+      (s0.deckType !== 'cards'
         ? `<li><b>Block</b>: a 2×2 square of four tiles. <b>Plus</b>: a centre tile and its four side neighbours. <b>Board-wide</b> goals count matching tiles anywhere between the walls and clear all of them at once.</li>`
         : `<li><b>Pips</b> (for sums): number cards count face value, J/Q/K count 10, aces count 1 (Blackjack also lets an ace be 11).</li>` +
           `<li><b>Ace</b> in straights: low (A-2-3) or high (Q-K-A), never both (K-A-2 does not count). Ace is 1 for Low Road, Parity and pip sums, and counts as high for High Road.</li>`) +
@@ -841,7 +847,7 @@ export class UI {
       `<li><span class="goal-badge shape-board">${SHAPE_SVG.board}<span class="goal-count">6</span></span> that many matching ${w}s anywhere on the board</li>` +
       `</ul>` +
       this.wardRulesHTML(this.settings) +
-      `<h3>Goal cards (${s0.deckType === 'tiles' ? 'tile deck' : 'card deck'})</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}. Switch the deck in Settings to see the other deck's goals.</p>` +
+      `<h3>Goal cards (${s0.deckType === 'num' ? 'numbered tiles' : s0.deckType === 'tiles' ? 'symbol tiles' : 'playing cards'})</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}. Switch the deck in Settings to see the other deck's goals.</p>` +
       this.goalListHTML(this.settings) +
       `<h3>Other cards</h3><dl class="goal-list"><dt>☠ Curse</dt><dd>Not a ${w}. When drawn it lands on a random empty cell and blocks it: nothing can be placed there, chains cannot pass through it, and a row or column containing it cannot be completed. Remove it by spending a ward (earned by clearing goals) or let a wall crush it.</dd></dl>` +
       `<h3>Current rules</h3><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` +
@@ -880,7 +886,9 @@ export class UI {
   rulesSummary(s) {
     const t = s.clock === 'time';
     const lines = [];
-    const deckDesc = s.deckType === 'tiles'
+    const deckDesc = s.deckType === 'num'
+      ? `${s.numColors * s.numMax * s.numCopies} numbered tiles (${s.numColors} colors × 1–${s.numMax}${s.numCopies > 1 ? ` × ${s.numCopies} copies` : ''})`
+      : s.deckType === 'tiles'
       ? `${s.tileColors * (s.tileBlanks + s.tileDots + s.tileTriangles + s.tileStars)} tiles (${s.tileColors} colors × ${s.tileBlanks} blank, ${s.tileDots} dot, ${s.tileTriangles} triangle, ${s.tileStars} star)`
       : '52 cards';
     lines.push(`Grid ${s.gridW}×${s.gridH}. Deck: ${deckDesc} + ${s.curseCount} curses (${s.curseSpread === 'even' ? 'evenly spaced' : 'randomly shuffled'}). Game over when fewer than ${s.minCells} cells remain between the walls.`);
@@ -1006,7 +1014,7 @@ export class UI {
     fs.appendChild(h('legend', { text: 'Goal pool' }));
     fs.appendChild(h('p', { class: 'help-p', text: 'The four walls draw from the enabled goals (no duplicates unless allowed above). Points are the base value for clearing that goal. Rows and columns must be completely filled between the walls.' }));
     this.goalTools = {};
-    for (const deck of ['tiles', 'cards']) {
+    for (const deck of ['num', 'tiles', 'cards']) {
       const tools = h('div', { class: 'goal-tools', 'data-deck': deck });
       const mk = (label, fn) => { const b = h('button', { type: 'button', text: label }); b.onclick = fn; tools.appendChild(b); };
       mk('All on', () => this.setGoals((d) => (goalDeck(d) === deck ? true : this.draft.goalsEnabled[d.id])));

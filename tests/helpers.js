@@ -1,4 +1,4 @@
-import { makeCard, makeCurse, makeTile } from '../public/js/cards.js';
+import { makeCard, makeCurse, makeTile, makeNum } from '../public/js/cards.js';
 import { defaultSettings } from '../public/js/settings.js';
 
 const SUIT_OF = { S: 0, H: 1, D: 2, C: 3 };
@@ -32,6 +32,25 @@ export function settings(overrides = {}) {
 
 export function tileSettings(overrides = {}) {
   return { ...defaultSettings(), deckType: 'tiles', ...overrides };
+}
+
+export function numSettings(overrides = {}) {
+  return { ...defaultSettings(), deckType: 'num', ...overrides };
+}
+
+// "R5" -> red 5, "B9" -> blue 9
+export function parseNum(tok) {
+  if (tok === '..' || tok === '.') return null;
+  if (tok === 'XX') return makeCurse(nextId++);
+  return makeNum(COLOR_OF[tok[0]], Number(tok.slice(1)), nextId++);
+}
+
+export function numBoard(rows, inset = {}) {
+  const grid = rows.map((r) => r.trim().split(/\s+/));
+  const H = grid.length, W = grid[0].length;
+  const cells = [];
+  for (const row of grid) for (const tok of row) cells.push(parseNum(tok));
+  return { W, H, cells, inset: { top: 0, right: 0, bottom: 0, left: 0, ...inset } };
 }
 
 const COLOR_OF = { R: 0, Y: 1, G: 2, B: 3, P: 4, T: 5 };

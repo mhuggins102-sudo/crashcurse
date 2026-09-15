@@ -16,9 +16,13 @@ export const SETTINGS_SCHEMA = [
   {
     group: 'Deck & curses',
     items: [
-      { key: 'deckType', label: 'Deck', type: 'select', def: 'tiles',
-        options: [['tiles', 'Tiles: colors and symbols'], ['cards', 'Playing cards']],
-        help: 'Each deck has its own goal pool. Tiles: N colors, each with blanks and symbol tiles as set below.' },
+      { key: 'deckType', label: 'Deck', type: 'select', def: 'num',
+        options: [['num', 'Numbered tiles: 1–9 in colors'], ['tiles', 'Symbol tiles: colors and symbols'], ['cards', 'Playing cards']],
+        help: 'Each deck has its own goal pool. The sliders below only apply to the chosen deck.' },
+      { key: 'numColors', label: 'Numbered tiles: colors', type: 'range', min: 3, max: 6, step: 1, def: 5 },
+      { key: 'numMax', label: 'Numbered tiles: highest number', type: 'range', min: 5, max: 9, step: 1, def: 9 },
+      { key: 'numCopies', label: 'Numbered tiles: copies of each tile', type: 'range', min: 1, max: 3, step: 1, def: 1,
+        help: 'With 1 copy the deck is colors × highest number (45 by default). Twins needs 2 or more.' },
       { key: 'tileColors', label: 'Tile colors', type: 'range', min: 3, max: 6, step: 1, def: 5 },
       { key: 'tileBlanks', label: 'Blank tiles per color', type: 'range', min: 0, max: 8, step: 1, def: 5 },
       { key: 'tileDots', label: 'Dot tiles per color', type: 'range', min: 0, max: 4, step: 1, def: 2 },
@@ -156,7 +160,7 @@ export const SCHEMA_ITEMS = SETTINGS_SCHEMA.flatMap((g) => g.items);
 export const SCHEMA_BY_KEY = Object.fromEntries(SCHEMA_ITEMS.map((it) => [it.key, it]));
 
 const DEFAULT_DISABLED_GOALS = new Set(['pair', 'fullHouse', 'fourKind', 'straightFlush', 'royalFlush', 'suitedCol', 'ladderCol',
-  'tTwins', 'tConstellation', 'tSymbolSquare', 'tCross']);
+  'tTwins', 'tConstellation', 'tSymbolSquare', 'tCross', 'nPair', 'nFourKind', 'nFullSuit']);
 
 export function defaultSettings() {
   const s = {};
@@ -178,6 +182,8 @@ export const PRESETS = {
   'Turn-based': { clock: 'turns', goalTurns: 8, mode: 'endless' },
   'Global timer': { wallMode: 'global', globalSeconds: 25, expiredGoalPenalty: 'none' },
   'Survival': { mode: 'survival', levelSeconds: 90 },
+  'Number tiles': { deckType: 'num' },
+  'Symbol tiles': { deckType: 'tiles' },
   'Playing cards': { deckType: 'cards' },
   'Poker only': { deckType: 'cards', goalsEnabled: Object.fromEntries(GOAL_DEFS.map((d) => [d.id, d.cat === 'Poker chains' && d.id !== 'royalFlush'])) },
 };

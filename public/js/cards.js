@@ -28,6 +28,10 @@ export function makeTile(color, sym, id) {
   return { kind: 'tile', color, sym, id };
 }
 
+export function makeNum(color, n, id) {
+  return { kind: 'num', color, n, id };
+}
+
 export function makeCurse(id) {
   return { kind: 'curse', id };
 }
@@ -40,12 +44,15 @@ export function pieceLabel(p) {
   if (!p) return '';
   if (p.kind === 'curse') return 'a curse';
   if (p.kind === 'tile') return `${TILE_COLOR_NAMES[p.color] || 'color ' + p.color} ${p.sym ? SYMBOL_NAMES[p.sym] : 'blank'}`;
+  if (p.kind === 'num') return `${TILE_COLOR_NAMES[p.color] || 'color ' + p.color} ${p.n}`;
   return RANK_LABELS[p.rank] + SUITS[p.suit];
 }
 
 // Identity of a piece's face, used to rebuild a deck around pieces still on the board.
 export function pieceKey(p) {
-  return p.kind === 'tile' ? p.color * 4 + p.sym : p.rank * 4 + p.suit;
+  if (p.kind === 'tile') return p.color * 4 + p.sym;
+  if (p.kind === 'num') return p.color * 16 + p.n;
+  return p.rank * 4 + p.suit;
 }
 
 export const cardKey = pieceKey;
