@@ -9,7 +9,7 @@ import { numBoard, numSettings, idx } from './helpers.js';
 const find = (b, s, id, placed) => findSatisfying(b, s, GOAL_BY_ID[id], placed);
 
 test('the numbered deck is colors × 1..max × copies, and only numbered goals are offered', () => {
-  const g = new Game(numSettings({ curseCount: 3 }), 'numdeck');
+  const g = new Game(numSettings({ curseCount: 3, numCopies: 1 }), 'numdeck');
   const pieces = g.deck.concat(g.current ? [g.current] : [], g.cells.filter(Boolean));
   const tiles = pieces.filter((p) => p.kind === 'num');
   assert.equal(tiles.length, 45);
@@ -17,6 +17,9 @@ test('the numbered deck is colors × 1..max × copies, and only numbered goals a
     const ns = tiles.filter((t) => t.color === color).map((t) => t.n).sort((a, b) => a - b);
     assert.deepEqual(ns, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   }
+  const gd = new Game(numSettings({ curseCount: 0 }), 'numdefault');
+  const td = gd.deck.concat(gd.current ? [gd.current] : [], gd.cells.filter(Boolean)).filter((p) => p.kind === 'num');
+  assert.equal(td.length, 90, 'the default deck carries two copies of each tile');
   assert.ok(Object.values(g.goals).every((x) => goalDeck(x.def) === 'num'));
   const g2 = new Game(numSettings({ numCopies: 2, numMax: 6, numColors: 4, curseCount: 0 }), 'numdeck2');
   const t2 = g2.deck.concat(g2.current ? [g2.current] : [], g2.cells.filter(Boolean)).filter((p) => p.kind === 'num');
