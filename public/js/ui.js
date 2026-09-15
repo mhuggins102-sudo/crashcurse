@@ -54,6 +54,8 @@ const ROW_VISIBLE = {
   perkExtraSeconds: (d) => d.clock === 'time',
   comboBonus: (d) => d.comboEnabled,
   rerollBonus: (d) => d.rerollTimer === 'add' && d.wardCostReroll > 0 && d.wardSpend === 'manual',
+  rerollTimer: (d) => d.wardCostReroll > 0 && d.wardSpend === 'manual',
+  extendBonus: (d) => d.wardCostExtend > 0 && d.wardSpend === 'manual',
   crushCheck: (d) => d.wallMode !== 'off',
   crushedCurses: (d) => d.wallMode !== 'off',
   clearPushesWallBack: (d) => d.wallMode !== 'off',
@@ -73,6 +75,9 @@ const SHAPE_SVG = {
   plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5h5v4h4v5h-4v4h-5v-4h-4v-5h4z" fill="currentColor"/></svg>',
   board: '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.6"/><circle cx="8" cy="3" r="1.6"/><circle cx="13" cy="3" r="1.6"/><circle cx="3" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13" cy="8" r="1.6"/><circle cx="3" cy="13" r="1.6"/><circle cx="8" cy="13" r="1.6"/><circle cx="13" cy="13" r="1.6"/></g></svg>',
 };
+const ICON_REPLACE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-9.6 3.7M2.5 8a5.5 5.5 0 0 1 9.6-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.6 1.6v3.2H9.4M3.4 14.4v-3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_EXTEND = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 5.5v3l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 const SHAPE_TITLE = {
   snake: 'Connected chain: bends allowed, no branching',
   group: 'Connected group: branching allowed',
@@ -220,7 +225,12 @@ export class UI {
       else if (act === 'close') this.hideOverlay();
     });
     for (const side of SIDES) {
-      this.el.goal[side].addEventListener('click', (e) => { e.stopPropagation(); this.showGoalPopup(side); });
+      this.el.goal[side].addEventListener('click', (e) => {
+        e.stopPropagation();
+        const b = e.target.closest('[data-ward]');
+        if (b) { if (!b.disabled) this.wardAction(b.dataset.ward, side); return; }
+        this.showGoalPopup(side);
+      });
     }
     document.addEventListener('click', () => this.hideGoalPopup());
     document.addEventListener('keydown', (e) => this.onKey(e));
@@ -287,8 +297,8 @@ export class UI {
     const availW = sideBySide ? vw - 32 - 300 - 24 : vw - 24;
     const availH = Math.max(320, vh - 96);
     const narrow = availW < 600;
-    const wallLR = narrow ? 78 : 124;
-    const wallTB = narrow ? 70 : 84;
+    const wallLR = narrow ? 80 : 124;
+    const wallTB = narrow ? 88 : 104;
     let cell = Math.floor((availW - 2 * wallLR) / g.W);
     cell = Math.min(cell, Math.floor((availH - 2 * wallTB) / g.H), 60);
     cell = Math.max(cell, 26);
@@ -395,11 +405,54 @@ export class UI {
           `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
           `<div class="goal-desc">${esc(goalDesc(goal.def, s))}</div>` +
           `<div class="goal-meta"><span class="pts">${goalPoints(goal.def, s)} pts</span><span class="timer-text"></span></div>` +
-          `<div class="goal-bar"><div class="goal-bar-fill"></div></div>`;
+          `<div class="goal-bar"><div class="goal-bar-fill"></div></div>` +
+          this.goalActionsHTML();
         box.title = `${goal.def.name}: ${goalDetail(goal.def, s)} Tap for details.`;
       }
       const cnt = box.querySelector('.goal-count');
       if (cnt) cnt.textContent = goalCountText(goal.def, s, g);
+      this.updateGoalButtons(side);
+    }
+  }
+
+  // Two icon buttons under every goal: replace it, or add time to it.
+  goalActionsHTML() {
+    const s = this.settings;
+    if (s.wardSpend !== 'manual' || (s.wardCostReroll <= 0 && s.wardCostExtend <= 0)) return '';
+    const unit = s.clock === 'time' ? 's' : '';
+    const parts = [];
+    if (s.wardCostReroll > 0) parts.push(`<button type="button" class="goal-btn" data-ward="reroll">${ICON_REPLACE}</button>`);
+    if (s.wardCostExtend > 0) parts.push(`<button type="button" class="goal-btn ext" data-ward="extend">${ICON_EXTEND}<span>+${s.extendBonus}${unit}</span></button>`);
+    return `<div class="goal-actions">${parts.join('')}</div>`;
+  }
+
+  wardActionInfo(kind, side) {
+    const g = this.game, s = this.settings;
+    const unit = s.clock === 'time' ? 'seconds' : 'turns';
+    if (kind === 'reroll') {
+      const cost = s.wardCostReroll;
+      const ok = g.status === 'playing' && g.wards >= cost;
+      const how = s.rerollTimer === 'keep' ? 'keeps the remaining time' : s.rerollTimer === 'add' ? `keeps the remaining time +${s.rerollBonus} ${unit}` : 'starts with a fresh timer';
+      return { cost, ok, label: 'Replace goal', title: ok ? `Replace this goal (${cost} ward${cost === 1 ? '' : 's'}); the new goal ${how}` : `Replace goal: needs ${cost} ward${cost === 1 ? '' : 's'}` };
+    }
+    if (kind === 'extend') {
+      const cost = s.wardCostExtend;
+      const ok = g.status === 'playing' && g.wards >= cost;
+      return { cost, ok, label: `Extend +${s.extendBonus} ${unit}`, title: ok ? `Add ${s.extendBonus} ${unit} to this goal (${cost} ward${cost === 1 ? '' : 's'})` : `Extend: needs ${cost} ward${cost === 1 ? '' : 's'}` };
+    }
+    const cost = s.wardCostRetreat;
+    const open = g.inset[side] > 0;
+    const ok = g.status === 'playing' && open && g.wards >= cost;
+    return { cost, ok, label: 'Push wall back', title: !open ? 'This wall is fully open' : ok ? `Reopen one row or column (${cost} ward${cost === 1 ? '' : 's'})` : `Push wall back: needs ${cost} ward${cost === 1 ? '' : 's'}` };
+  }
+
+  updateGoalButtons(side) {
+    const box = this.el.goal[side];
+    for (const b of box.querySelectorAll('[data-ward]')) {
+      const info = this.wardActionInfo(b.dataset.ward, side);
+      b.disabled = !info.ok;
+      b.title = info.title;
+      b.setAttribute('aria-label', info.label);
     }
   }
 
@@ -418,18 +471,13 @@ export class UI {
     pop.style.borderColor = `var(--${side})`;
 
     let actions = '';
-    if (g.status === 'playing' && s.wardSpend === 'manual' && (s.wardCostReroll > 0 || s.wardCostRetreat > 0)) {
-      const btn = (kind, label, cost, ok, why) =>
-        `<button type="button" class="goal-pop-btn" data-ward="${kind}"${ok ? '' : ' disabled'} title="${esc(why)}">${label} · ${cost} ward${cost === 1 ? '' : 's'}</button>`;
+    if (g.status === 'playing' && s.wardSpend === 'manual' && (s.wardCostReroll > 0 || s.wardCostExtend > 0 || s.wardCostRetreat > 0)) {
       const parts = [];
-      if (s.wardCostReroll > 0) {
-        const ok = g.wards >= s.wardCostReroll;
-        parts.push(btn('reroll', 'Replace goal', s.wardCostReroll, ok, ok ? 'Draw a different goal for this wall' : 'Not enough wards'));
-      }
-      if (s.wardCostRetreat > 0) {
-        const open = g.inset[side] > 0;
-        const ok = open && g.wards >= s.wardCostRetreat;
-        parts.push(btn('retreat', 'Push wall back', s.wardCostRetreat, ok, !open ? 'This wall is fully open' : ok ? 'Reopen one row or column' : 'Not enough wards'));
+      for (const kind of ['reroll', 'extend', 'retreat']) {
+        const cost = { reroll: s.wardCostReroll, extend: s.wardCostExtend, retreat: s.wardCostRetreat }[kind];
+        if (!(cost > 0)) continue;
+        const info = this.wardActionInfo(kind, side);
+        parts.push(`<button type="button" class="goal-pop-btn" data-ward="${kind}"${info.ok ? '' : ' disabled'} title="${esc(info.title)}">${esc(info.label)} · ${cost} ward${cost === 1 ? '' : 's'}</button>`);
       }
       actions = `<div class="goal-pop-actions">${parts.join('')}<span class="goal-pop-wards">${g.wards} ward${g.wards === 1 ? '' : 's'} banked</span></div>`;
     }
@@ -456,6 +504,7 @@ export class UI {
     const g = this.game;
     let ok = false;
     if (kind === 'reroll') ok = g.wardReroll(side);
+    else if (kind === 'extend') ok = g.wardExtend(side);
     else if (kind === 'retreat') ok = g.wardRetreat(side);
     this.hideGoalPopup();
     if (!ok) { this.toast('That ward action is not available right now', 'bad'); return; }
@@ -536,7 +585,8 @@ export class UI {
       if (s.wardSpend === 'manual' && g.wards > 0) {
         const uses = [];
         if (s.wardCostCurse > 0 && g.wards >= s.wardCostCurse && g.curseCells().length) uses.push('tap a glowing curse to remove it');
-        if (s.wardCostReroll > 0 && g.wards >= s.wardCostReroll) uses.push('tap a goal to replace it');
+        if (s.wardCostReroll > 0 && g.wards >= s.wardCostReroll) uses.push('use the ↻ button under a goal to replace it');
+        if (s.wardCostExtend > 0 && g.wards >= s.wardCostExtend) uses.push(`use the clock button to add ${s.extendBonus} ${s.clock === 'time' ? 'seconds' : 'turns'}`);
         if (s.wardCostRetreat > 0 && g.wards >= s.wardCostRetreat && SIDES.some((x) => g.inset[x] > 0)) uses.push('tap a goal to push its wall back');
         if (uses.length) hint += ` Wards: ${uses.join(', or ')}.`;
       }
@@ -592,6 +642,11 @@ export class UI {
         case 'goalSwap':
           this.toast(`${ev.from} no longer fits between the walls; replaced by ${ev.to}`);
           this.log(`${SIDE_LABEL[ev.side]} goal ${ev.from} no longer fits, replaced by ${ev.to}`);
+          break;
+        case 'extend':
+          this.toast(`${ev.name} extended by ${ev.bonus} ${this.settings.clock === 'time' ? 'seconds' : 'turns'}`, 'good');
+          this.log(`Ward spent: ${SIDE_LABEL[ev.side]} goal ${ev.name} extended +${ev.bonus}`, 'good');
+          this.flashWall(ev.side, 'cleared');
           break;
         case 'reroll':
           this.toast(`Goal replaced: ${ev.from} → ${ev.to}`, 'good');
@@ -794,7 +849,8 @@ export class UI {
       ['Cards crushed', st.cardsCrushed],
       ['Curses drawn / removed', `${st.cursesDrawn} / ${st.cursesRemoved}`],
       ['Wards earned / spent', `${st.wardsEarned} / ${st.wardsSpent}`],
-      ['Goals replaced / walls pushed back', `${st.rerolls} / ${st.retreatsBought}`],
+      ['Goals replaced / extended', `${st.rerolls} / ${st.extends}`],
+      ['Walls pushed back', st.retreatsBought],
       ['Seed', g.seed],
     ];
     const goalLines = GOAL_DEFS.filter((d) => st.goalsOffered[d.id]).map((d) => `${d.name} ${st.goalsCleared[d.id] || 0}/${st.goalsOffered[d.id]}`).join(' · ');
@@ -824,7 +880,7 @@ export class UI {
       deckPara +
       `<h3>Controls</h3><ul>` +
       `<li>Click or tap an empty cell to place the card; hover shows a preview.</li>` +
-      `<li>Click a glowing curse to remove it with a ward.</li>` +
+      `<li>Click a glowing curse to remove it with a ward. The two small buttons under each goal replace it (↻) or add time to it (clock); the goal itself opens its full description.</li>` +
       `<li><kbd>←↑↓→</kbd> move a cursor, <kbd>Enter</kbd> or <kbd>Space</kbd> acts on it.</li>` +
       `<li><kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
       `</ul>` +
@@ -865,7 +921,8 @@ export class UI {
     if (s.wardSpend !== 'manual') return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared; they are spent automatically on a random curse.</p>`;
     const uses = [];
     if (s.wardCostCurse > 0) uses.push(`<li><b>Remove a curse</b> (${s.wardCostCurse}): tap a glowing curse.</li>`);
-    if (s.wardCostReroll > 0) uses.push(`<li><b>Replace a goal</b> (${s.wardCostReroll}): tap the goal, then "Replace goal". The new goal ${s.rerollTimer === 'keep' ? 'keeps the remaining time' : s.rerollTimer === 'add' ? `keeps the remaining time plus ${s.rerollBonus} ${s.clock === 'time' ? 'seconds' : 'turns'}` : 'starts with a fresh timer'}.</li>`);
+    if (s.wardCostReroll > 0) uses.push(`<li><b>Replace a goal</b> (${s.wardCostReroll}): the ↻ button under a goal (or the goal's popup). The new goal ${s.rerollTimer === 'keep' ? 'keeps the remaining time' : s.rerollTimer === 'add' ? `keeps the remaining time plus ${s.rerollBonus} ${s.clock === 'time' ? 'seconds' : 'turns'}` : 'starts with a fresh timer'}.</li>`);
+    if (s.wardCostExtend > 0) uses.push(`<li><b>Extend a goal</b> (${s.wardCostExtend}): the clock button under a goal adds ${s.extendBonus} ${s.clock === 'time' ? 'seconds' : 'turns'} to it.</li>`);
     if (s.wardCostRetreat > 0) uses.push(`<li><b>Push a wall back</b> (${s.wardCostRetreat}): tap the goal on a wall that has moved in, then "Push wall back". The reopened row or column comes back empty.</li>`);
     return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared${s.perkExtraWard ? ', plus one extra for clearing two or more goals at once' : ''}. Wards bank until you spend them (cost in wards):</p><ul>${uses.join('') || '<li>No ward uses are enabled in Settings.</li>'}</ul>`;
   }

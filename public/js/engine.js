@@ -50,7 +50,7 @@ export class Game {
       placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
       multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
       wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
-      wardsEarned: 0, wardsSpent: 0, rerolls: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0,
+      wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0,
     };
     this.buildDeck();
     for (const side of SIDES) this.newGoal(side);
@@ -546,7 +546,7 @@ export class Game {
 
   canAffordWard(kind) {
     const s = this.s;
-    const cost = { curse: s.wardCostCurse, reroll: s.wardCostReroll, retreat: s.wardCostRetreat }[kind] || 0;
+    const cost = { curse: s.wardCostCurse, reroll: s.wardCostReroll, retreat: s.wardCostRetreat, extend: s.wardCostExtend }[kind] || 0;
     return this.status === 'playing' && s.wardSpend === 'manual' && cost > 0 && this.wards >= cost ? cost : 0;
   }
 
@@ -577,7 +577,21 @@ export class Game {
     return true;
   }
 
-  // Ward use 3: push a wall back out one step.
+  // Ward use 3: add time to the current goal on a wall.
+  wardExtend(side) {
+    const cost = this.canAffordWard('extend');
+    const g = this.goals[side];
+    if (!cost || !g) return false;
+    this.wards -= cost;
+    this.stats.wardsSpent += cost;
+    this.stats.extends++;
+    g.timeLeft += this.s.extendBonus;
+    g.duration = Math.max(g.duration, g.timeLeft);
+    this.emit('extend', { side, name: g.def.name, bonus: this.s.extendBonus });
+    return true;
+  }
+
+  // Ward use 4: push a wall back out one step.
   wardRetreat(side) {
     const cost = this.canAffordWard('retreat');
     if (!cost || this.inset[side] <= 0) return false;

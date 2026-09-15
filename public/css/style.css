@@ -18,7 +18,7 @@
   --card-red: #c8323a;
   --card-black: #1c1c22;
   --cell: 56px;
-  --wall-tb: 84px;
+  --wall-tb: 104px;
   --wall-lr: 124px;
   --cols: 6;
   --rows: 6;
@@ -243,6 +243,19 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .goal-pop-notes { margin: 6px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
 .goal-pop-notes:empty { display: none; }
 .goal-pop-hint { margin-top: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right; }
+
+/* ---------- goal action buttons ---------- */
+.goal-actions { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 3px; }
+.goal-btn {
+  height: 22px; min-width: 26px; padding: 0 6px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  background: rgba(0,0,0,.42); border: 1px solid rgba(255,255,255,.2); color: var(--text);
+  font-size: 10.5px; font-weight: 800; line-height: 1; cursor: pointer;
+}
+.goal-btn svg { width: 13px; height: 13px; }
+.goal-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: rgba(0,0,0,.55); }
+.goal-btn:disabled { opacity: .35; cursor: not-allowed; }
+.goal.none .goal-actions { display: none; }
 
 /* ---------- goal badges (shape icon + card count) ---------- */
 .goal-badge {

@@ -106,9 +106,11 @@ export const SETTINGS_SCHEMA = [
       { key: 'wardCostCurse', label: 'Ward cost: remove a curse (0 = not allowed)', type: 'range', min: 0, max: 3, step: 1, def: 1 },
       { key: 'wardCostReroll', label: 'Ward cost: replace a goal (0 = not allowed)', type: 'range', min: 0, max: 3, step: 1, def: 1 },
       { key: 'wardCostRetreat', label: 'Ward cost: push a wall back one step (0 = not allowed)', type: 'range', min: 0, max: 3, step: 1, def: 0 },
-      { key: 'rerollTimer', label: 'A replaced goal', type: 'select', def: 'keep',
+      { key: 'rerollTimer', label: 'A replaced goal', type: 'select', def: 'add',
         options: [['keep', 'Keeps the remaining time'], ['add', 'Keeps the remaining time plus a bonus'], ['reset', 'Starts with a fresh timer']] },
       { key: 'rerollBonus', label: 'Bonus added to a replaced goal (turns or seconds)', type: 'range', min: 1, max: 30, step: 1, def: 5 },
+      { key: 'wardCostExtend', label: 'Ward cost: extend the current goal (0 = not allowed)', type: 'range', min: 0, max: 3, step: 1, def: 1 },
+      { key: 'extendBonus', label: 'Time added by an extension (turns or seconds)', type: 'range', min: 1, max: 30, step: 1, def: 5 },
     ],
   },
   {

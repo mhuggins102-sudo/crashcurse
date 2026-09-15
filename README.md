@@ -88,7 +88,7 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Chains | snake paths (bends, no branching); for cards, straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
 | Walls | turn clock: each wall's goal lasts 15 placements; expiry moves that wall in; timers shrink 10 % per 20 placements; right after a crush, goals the board already satisfies clear | Walls & timing |
-| Wards | one per clear (plus one for a multi-clear); spend on removing a curse or replacing a goal (pushing a wall back is available but off by default), each with its own cost; a replaced goal keeps its time, gets a bonus, or resets | Wards |
+| Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal (keeps its time plus a bonus by default), or extending a goal by a few turns; pushing a wall back is available but off by default; every use has its own cost | Wards |
 | Multi-clear | ×2 points per extra goal, +1 ward, 1 curse purged from the deck | Multi-clear perks |
 | Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |

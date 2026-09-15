@@ -347,3 +347,23 @@ test('the lines-only crush check ignores chain goals the board already satisfies
   g3.advanceWall('top', 'test');
   assert.equal(g3.cells[4], null, 'with every goal checked, the pair clears');
 });
+
+
+test('wards can extend the current goal by the configured bonus', () => {
+  const s = settings({ clock: 'turns', goalTurns: 10, wardCostExtend: 1, extendBonus: 4, wallMode: 'off', curseCount: 0 });
+  const g = new Game(s, 'extend');
+  g.wards = 1;
+  const id = g.goals.top.id;
+  g.goals.top.timeLeft = 3;
+  assert.equal(g.wardExtend('top'), true);
+  assert.equal(g.goals.top.id, id, 'the goal itself stays');
+  assert.equal(g.goals.top.timeLeft, 7);
+  assert.equal(g.wards, 0);
+  assert.equal(g.wardExtend('top'), false, 'no wards left');
+  assert.ok(g.drain().some((e) => e.type === 'extend' && e.bonus === 4));
+  const off = settings({ wardCostExtend: 0, wallMode: 'off', curseCount: 0 });
+  const g2 = new Game(off, 'extendoff');
+  g2.wards = 3;
+  assert.equal(g2.wardExtend('top'), false, 'cost 0 disables the use');
+  assert.equal(g2.wards, 3);
+});
