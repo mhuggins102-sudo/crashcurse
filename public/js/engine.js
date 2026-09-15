@@ -50,7 +50,7 @@ export class Game {
       placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
       multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
       wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
-      wardsEarned: 0, wardsSpent: 0, rerolls: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0,
+      wardsEarned: 0, wardsSpent: 0, rerolls: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0,
     };
     this.buildDeck();
     for (const side of SIDES) this.newGoal(side);
@@ -238,21 +238,23 @@ export class Game {
     return true;
   }
 
-  resolveClears(cleared, placedIdx) {
+  resolveClears(cleared, placedIdx, { viaWall = false } = {}) {
     const s = this.s;
     if (!cleared.length) {
-      if (s.comboEnabled) this.combo = 0;
+      if (s.comboEnabled && !viaWall) this.combo = 0;
       return [];
     }
     const n = cleared.length;
     const base = cleared.reduce((a, c) => a + goalPoints(c.goal.def, s), 0);
     const multi = n >= 2 ? Math.pow(s.multiMult, n - 1) : 1;
-    const comboMult = s.comboEnabled ? 1 + this.combo * s.comboBonus : 1;
+    const comboMult = s.comboEnabled && !viaWall ? 1 + this.combo * s.comboBonus : 1;
     const pts = Math.round(base * multi * comboMult);
     const comboBefore = this.combo;
     this.score += pts;
-    this.combo += 1;
-    this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
+    if (!viaWall) {
+      this.combo += 1;
+      this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
+    } else this.stats.wallClears += n;
     this.stats.clears += n;
     for (const c of cleared) this.stats.goalsCleared[c.goal.def.id] = (this.stats.goalsCleared[c.goal.def.id] || 0) + 1;
     if (n >= 2) this.stats.multiClears[n] = (this.stats.multiClears[n] || 0) + 1;
@@ -286,7 +288,7 @@ export class Game {
     const clearedSides = cleared.map((c) => c.side);
     this.emit('clear', {
       clears: cleared.map((c) => ({ side: c.side, id: c.goal.def.id, name: c.goal.def.name, cells: c.cells, points: goalPoints(c.goal.def, s) })),
-      points: pts, n, multi, comboMult, combo: comboBefore, removed, wardsGained, perks, placedIdx,
+      points: pts, n, multi, comboMult, combo: comboBefore, removed, wardsGained, perks, placedIdx, source: viaWall ? 'wall' : 'place',
     });
     for (const side of clearedSides) this.newGoal(side);
     if (s.wardSpend === 'auto') this.autoSpendWards();
@@ -297,10 +299,12 @@ export class Game {
     const s = this.s;
     if (this.clock !== 'turns') return;
     if (s.wallMode === 'goal') {
-      for (const side of SIDES) {
+      const before = SIDES.map((side) => (this.goals[side] ? this.goals[side].id : null));
+      for (let i = 0; i < SIDES.length; i++) {
+        const side = SIDES[i];
         if (clearedSides.includes(side)) continue;
         const g = this.goals[side];
-        if (!g) continue;
+        if (!g || g.id !== before[i]) continue; // fresh goals (from a crush clear) start with a full timer
         g.timeLeft -= 1;
         if (g.timeLeft <= 0) { this.expireGoal(side); if (this.status !== 'playing') return; }
       }
@@ -312,6 +316,23 @@ export class Game {
       this.levelLeft -= 1;
       if (this.levelLeft <= 0) this.levelUp();
     }
+  }
+
+  // After a wall moves in, goals the board already satisfies clear even though
+  // nothing was just placed (a shorter row may now be complete, for instance).
+  crushCheck() {
+    const s = this.s;
+    if (s.crushCheck === 'off' || this.status !== 'playing') return;
+    const loose = { ...s, mustIncludePlaced: false };
+    const cleared = [];
+    for (const side of SIDES) {
+      const g = this.goals[side];
+      if (!g) continue;
+      if (s.crushCheck === 'lines' && !(g.def.shape === 'row' || g.def.shape === 'col' || g.def.shape === 'rowcol')) continue;
+      const found = findSatisfying(this, loose, g.def, null);
+      if (found) cleared.push({ side, goal: g, cells: found });
+    }
+    if (cleared.length) this.resolveClears(cleared, null, { viaWall: true });
   }
 
   tick(dt) {
@@ -412,12 +433,12 @@ export class Game {
     for (const side of SIDES) {
       const g = this.goals[side];
       if (!g || goalFeasible(g.def, this.s, this)) continue;
-      this.newGoal(side, { exclude: g.def.id, keepTime: g.timeLeft });
+      this.newGoal(side, { exclude: g.def.id, keepTime: g.timeLeft, allowOverflow: true });
       this.emit('goalSwap', { side, from: g.def.name, to: this.goals[side] ? this.goals[side].def.name : null });
     }
   }
 
-  newGoal(side, { exclude = null, keepTime = null } = {}) {
+  newGoal(side, { exclude = null, keepTime = null, allowOverflow = false } = {}) {
     const s = this.s;
     const others = SIDES.filter((x) => x !== side).map((x) => this.goals[x]).filter(Boolean);
     const activeIds = others.map((g) => g.def.id);
@@ -438,8 +459,12 @@ export class Game {
     if (!candidates.length) candidates = this.goalPool();
     if (!candidates.length) { this.goals[side] = null; this.emit('goal', { side, id: null }); return; }
     const def = this.rng.pick(candidates);
-    const duration = this.goalDuration();
-    const timeLeft = keepTime != null ? Math.max(this.clock === 'time' ? 1 : 1, Math.min(keepTime, duration)) : duration;
+    let duration = this.goalDuration();
+    let timeLeft = duration;
+    if (keepTime != null) {
+      timeLeft = Math.max(1, allowOverflow ? keepTime : Math.min(keepTime, duration));
+      duration = Math.max(duration, timeLeft);
+    }
     this.goals[side] = { def, side, duration, timeLeft, id: this.nextId++ };
     this.stats.goalsOffered[def.id] = (this.stats.goalsOffered[def.id] || 0) + 1;
     this.emit('goal', { side, id: def.id, name: def.name, duration });
@@ -497,6 +522,7 @@ export class Game {
     const rows = this.rows(), cols = this.cols();
     if (rows <= 0 || cols <= 0 || rows * cols < this.s.minCells) { this.gameOver('crushed'); return; }
     this.swapInfeasibleGoals();
+    this.crushCheck();
   }
 
   retreatWall(side, reason = 'perk') {
@@ -544,7 +570,9 @@ export class Game {
     this.wards -= cost;
     this.stats.wardsSpent += cost;
     this.stats.rerolls++;
-    this.newGoal(side, { exclude: g.def.id, keepTime: this.s.rerollTimer === 'keep' ? g.timeLeft : null });
+    const mode = this.s.rerollTimer;
+    const keepTime = mode === 'keep' ? g.timeLeft : mode === 'add' ? g.timeLeft + this.s.rerollBonus : null;
+    this.newGoal(side, { exclude: g.def.id, keepTime, allowOverflow: mode === 'add' });
     this.emit('reroll', { side, from: g.def.name, to: this.goals[side] ? this.goals[side].def.name : null });
     return true;
   }

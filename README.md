@@ -84,11 +84,11 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 | Piece | Default | Where to tune |
 | --- | --- | --- |
 | Grid | 6×6, game over below 4 open cells | Board |
-| Deck | numbered tiles (5 colors × 1–9 × 2 copies), symbol tiles, or 52 cards, plus 6 curses; discards reshuffle back in | Deck & curses |
+| Deck | numbered tiles (5 colors × 1–9 × 2 copies), symbol tiles, or 52 cards, plus 15 curses; discards reshuffle back in | Deck & curses |
 | Chains | snake paths (bends, no branching); for cards, straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
-| Walls | each wall's goal has 40 s; expiry moves that wall in; timers shrink 10 % per minute | Walls & timing |
-| Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal, or pushing a wall back, each with its own cost | Wards |
+| Walls | turn clock: each wall's goal lasts 15 placements; expiry moves that wall in; timers shrink 10 % per 20 placements; right after a crush, goals the board already satisfies clear | Walls & timing |
+| Wards | one per clear (plus one for a multi-clear); spend on removing a curse or replacing a goal (pushing a wall back is available but off by default), each with its own cost; a replaced goal keeps its time, gets a bonus, or resets | Wards |
 | Multi-clear | ×2 points per extra goal, +1 ward, 1 curse purged from the deck | Multi-clear perks |
 | Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |

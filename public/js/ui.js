@@ -53,6 +53,8 @@ const ROW_VISIBLE = {
   levelBonus: (d) => d.mode === 'survival',
   perkExtraSeconds: (d) => d.clock === 'time',
   comboBonus: (d) => d.comboEnabled,
+  rerollBonus: (d) => d.rerollTimer === 'add' && d.wardCostReroll > 0 && d.wardSpend === 'manual',
+  crushCheck: (d) => d.wallMode !== 'off',
   crushedCurses: (d) => d.wallMode !== 'off',
   clearPushesWallBack: (d) => d.wallMode !== 'off',
 };
@@ -564,7 +566,7 @@ export class UI {
           break;
         case 'clear': {
           const names = ev.clears.map((c) => c.name).join(' + ');
-          const word = ev.n >= 2 ? `${MULTI_WORDS[Math.min(ev.n, 4)]} CLEAR! ` : '';
+          const word = (ev.source === 'wall' ? 'WALL CLEAR! ' : '') + (ev.n >= 2 ? `${MULTI_WORDS[Math.min(ev.n, 4)]} CLEAR! ` : '');
           this.toast(`${word}${names}  +${ev.points}`, ev.n >= 2 ? 'great' : 'good');
           this.log(`${word}${names} +${ev.points}${ev.comboMult > 1 ? ` (combo ×${ev.comboMult.toFixed(2).replace(/\.?0+$/, '')})` : ''}`, ev.n >= 2 ? 'great' : 'good');
           for (const r of ev.removed) this.ghost(r.idx, r.card, 'clear');
@@ -863,7 +865,7 @@ export class UI {
     if (s.wardSpend !== 'manual') return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared; they are spent automatically on a random curse.</p>`;
     const uses = [];
     if (s.wardCostCurse > 0) uses.push(`<li><b>Remove a curse</b> (${s.wardCostCurse}): tap a glowing curse.</li>`);
-    if (s.wardCostReroll > 0) uses.push(`<li><b>Replace a goal</b> (${s.wardCostReroll}): tap the goal, then "Replace goal". The new goal ${s.rerollTimer === 'keep' ? 'keeps the remaining time' : 'starts with a fresh timer'}.</li>`);
+    if (s.wardCostReroll > 0) uses.push(`<li><b>Replace a goal</b> (${s.wardCostReroll}): tap the goal, then "Replace goal". The new goal ${s.rerollTimer === 'keep' ? 'keeps the remaining time' : s.rerollTimer === 'add' ? `keeps the remaining time plus ${s.rerollBonus} ${s.clock === 'time' ? 'seconds' : 'turns'}` : 'starts with a fresh timer'}.</li>`);
     if (s.wardCostRetreat > 0) uses.push(`<li><b>Push a wall back</b> (${s.wardCostRetreat}): tap the goal on a wall that has moved in, then "Push wall back". The reopened row or column comes back empty.</li>`);
     return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared${s.perkExtraWard ? ', plus one extra for clearing two or more goals at once' : ''}. Wards bank until you spend them (cost in wards):</p><ul>${uses.join('') || '<li>No ward uses are enabled in Settings.</li>'}</ul>`;
   }
@@ -899,6 +901,7 @@ export class UI {
       lines.push(`Every ${t ? s.globalSeconds + ' seconds' : s.globalTurns + ' placements'} a wall moves in (${s.globalOrder === 'rotate' ? 'top, right, bottom, left in turn' : 'a random wall'}).`);
     } else lines.push('Walls never move.');
     if (s.wallMode !== 'off' && s.pressureRamp < 1) lines.push(`Timers shrink by ${Math.round((1 - s.pressureRamp) * 100)}% per ${t ? 'minute' : '20 placements'}, down to ${Math.round(s.pressureFloor * 100)}% of the base.`);
+    if (s.wallMode !== 'off' && s.crushCheck !== 'off') lines.push(`Right after a wall moves in, ${s.crushCheck === 'lines' ? 'full row and column goals' : 'all goals'} the board already satisfies clear without needing a freshly placed ${pieceWord(s)}.`);
     const w = pieceWord(s);
     lines.push(`Chains are ${s.chainShape === 'path' ? 'snake paths (bends allowed, no branching)' : 'any connected group'}.${s.deckType === 'cards' ? ` Straights are ${s.straightLen} cards${s.straightOrdered ? ' and must run in order' : ''}; flushes are ${s.flushLen} cards.` : ''}`);
     lines.push(`${s.mustIncludePlaced ? `The ${w} you just placed must be part of the goal you complete.` : 'Any placement clears a goal the board already satisfies.'} ${s.clearedCardsRemoved ? `Cleared ${w}s leave the board.` : `Cleared ${w}s stay on the board.`}`);

@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../public/js/engine.js';
 import { settings, parseCard } from './helpers.js';
+import { defaultSettings } from '../public/js/settings.js';
+import { GOAL_BY_ID } from '../public/js/goals.js';
 import { makeCard, makeCurse } from '../public/js/cards.js';
 import { botStep } from '../public/js/bot.js';
 import { makeRng } from '../public/js/rng.js';
@@ -112,7 +114,7 @@ test('walls crush the outer line and end the game below minCells', () => {
 });
 
 test('goal expiry moves its wall and draws a new goal (time clock)', () => {
-  const s = settings({ goalSeconds: 10, wallMode: 'goal', expiredGoalPenalty: 'wall', pressureRamp: 1 });
+  const s = settings({ clock: 'time', goalSeconds: 10, wallMode: 'goal', expiredGoalPenalty: 'wall', pressureRamp: 1 });
   const g = new Game(s, 'expire');
   const before = g.goals.top.id;
   g.tick(9.5);
@@ -202,7 +204,7 @@ test('bot plays a full default game to completion', () => {
 });
 
 test('a wall crushing the last empty cells while a card is held ends the game', () => {
-  const s = settings({ gridW: 3, gridH: 3, wallMode: 'goal', goalSeconds: 10, curseCount: 0, minCells: 1, pressureRamp: 1 });
+  const s = settings({ clock: 'time', gridW: 3, gridH: 3, wallMode: 'goal', goalSeconds: 10, curseCount: 0, minCells: 1, pressureRamp: 1, crushCheck: 'off' });
   const g = new Game(s, 'stuck');
   g.cells.fill(null);
   // Fill everything except one cell in the top row
@@ -270,4 +272,78 @@ test('a banked ward that can push a wall back keeps a full board alive', () => {
   g.current = null;
   g.draw();
   assert.equal(g.status, 'playing', 'the player can buy the top row back');
+});
+
+
+test('new defaults: turn clock, 15 curses, two upcoming, curse with no cell ends the game, no wall push-back', () => {
+  const d = defaultSettings();
+  assert.equal(d.clock, 'turns');
+  assert.equal(d.goalTurns, 15);
+  assert.equal(d.curseCount, 15);
+  assert.equal(d.peekCount, 2);
+  assert.equal(d.curseOnNoSpace, 'gameover');
+  assert.equal(d.wardCostRetreat, 0);
+  assert.equal(d.numCopies, 2);
+  assert.equal(d.crushCheck, 'all');
+});
+
+test('a replaced goal can keep its time plus a bonus, even beyond the base timer', () => {
+  const s = settings({ clock: 'turns', goalTurns: 10, rerollTimer: 'add', rerollBonus: 5, wallMode: 'off', curseCount: 0 });
+  const g = new Game(s, 'addbonus');
+  g.wards = 2;
+  g.goals.top.timeLeft = 3;
+  assert.equal(g.wardReroll('top'), true);
+  assert.equal(g.goals.top.timeLeft, 8, '3 remaining + 5 bonus');
+  g.goals.top.timeLeft = 9;
+  g.wardReroll('top');
+  assert.equal(g.goals.top.timeLeft, 14, 'the bonus may exceed the base duration');
+  assert.equal(g.goals.top.duration, 14, 'the bar scales to the longer timer');
+});
+
+test('after a wall crushes a column, a row that became full clears without a placement', () => {
+  const s = settings({ gridW: 4, gridH: 3, wallMode: 'off', curseCount: 0, minCells: 1, lineMinLen: 2, crushCheck: 'all' });
+  const g = new Game(s, 'crushclear');
+  g.goals.top = { def: GOAL_BY_ID.fillRow, side: 'top', duration: 15, timeLeft: 15, id: 1 };
+  g.goals.right = null; g.goals.bottom = null; g.goals.left = null;
+  g.cells.fill(null);
+  // row 0: three cards, the fourth (rightmost) cell empty; the right wall will crush that column
+  g.cells[0] = makeCard(2, 0, 1); g.cells[1] = makeCard(5, 1, 2); g.cells[2] = makeCard(9, 2, 3);
+  g.combo = 2;
+  const before = g.score;
+  g.advanceWall('right', 'test');
+  assert.equal(g.cells[0], null, 'the completed row cleared');
+  assert.ok(g.score > before);
+  assert.equal(g.combo, 2, 'a wall clear does not touch the combo');
+  assert.equal(g.stats.wallClears, 1);
+  const ev = g.drain().find((e) => e.type === 'clear');
+  assert.equal(ev.source, 'wall');
+  assert.notEqual(g.goals.top.def.id, 'fillRow', 'a fresh goal was drawn');
+
+  const s2 = settings({ gridW: 4, gridH: 3, wallMode: 'off', curseCount: 0, minCells: 1, lineMinLen: 2, crushCheck: 'off' });
+  const g2 = new Game(s2, 'crushoff');
+  g2.goals.top = { def: GOAL_BY_ID.fillRow, side: 'top', duration: 15, timeLeft: 15, id: 1 };
+  g2.goals.right = null; g2.goals.bottom = null; g2.goals.left = null;
+  g2.cells.fill(null);
+  g2.cells[0] = makeCard(2, 0, 1); g2.cells[1] = makeCard(5, 1, 2); g2.cells[2] = makeCard(9, 2, 3);
+  g2.advanceWall('right', 'test');
+  assert.ok(g2.cells[0], 'nothing clears when the check is off');
+});
+
+test('the lines-only crush check ignores chain goals the board already satisfies', () => {
+  const s = settings({ gridW: 4, gridH: 3, wallMode: 'off', curseCount: 0, minCells: 1, crushCheck: 'lines' });
+  const g = new Game(s, 'crushlines');
+  g.goals.top = { def: GOAL_BY_ID.pair, side: 'top', duration: 15, timeLeft: 15, id: 1 };
+  g.goals.right = null; g.goals.bottom = null; g.goals.left = null;
+  g.cells.fill(null);
+  g.cells[4] = makeCard(7, 0, 1); g.cells[5] = makeCard(7, 1, 2);
+  g.advanceWall('top', 'test');
+  assert.ok(g.cells[4] && g.cells[5], 'the pair stays: chains are not part of the lines-only check');
+  const s3 = settings({ gridW: 4, gridH: 3, wallMode: 'off', curseCount: 0, minCells: 1, crushCheck: 'all' });
+  const g3 = new Game(s3, 'crushall');
+  g3.goals.top = { def: GOAL_BY_ID.pair, side: 'top', duration: 15, timeLeft: 15, id: 1 };
+  g3.goals.right = null; g3.goals.bottom = null; g3.goals.left = null;
+  g3.cells.fill(null);
+  g3.cells[4] = makeCard(7, 0, 1); g3.cells[5] = makeCard(7, 1, 2);
+  g3.advanceWall('top', 'test');
+  assert.equal(g3.cells[4], null, 'with every goal checked, the pair clears');
 });
