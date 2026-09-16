@@ -363,8 +363,9 @@ export class UI {
     const availW = Math.max(220, (wrap.clientWidth || vw) - 8);
     const availH = Math.max(220, (wrap.clientHeight || window.innerHeight - 160) - 8);
     const narrow = availW < 600;
-    const wallLR = narrow ? 76 : 124;
-    const wallTB = narrow ? 84 : 104;
+    // Same thickness on every side so all four goal cards are the same rectangle.
+    const wallLR = narrow ? 84 : 124;
+    const wallTB = wallLR;
     let cell = Math.floor((availW - 2 * wallLR) / g.W);
     cell = Math.min(cell, Math.floor((availH - 2 * wallTB) / g.H), 60);
     cell = Math.max(cell, 24);
@@ -377,6 +378,20 @@ export class UI {
     a.classList.toggle('narrow', narrow || cell < 40);
     this.cell = cell;
     document.documentElement.style.setProperty('--tray-h', (this.el.hud.offsetHeight || 92) + 'px');
+    for (const side of SIDES) this.fitGoalTitle(this.el.goal[side]);
+  }
+
+  // Goal names stay on one line: shrink the title a little before letting it truncate.
+  fitGoalTitle(box) {
+    const title = box && box.querySelector('.goal-title');
+    if (!title) return;
+    title.style.fontSize = '';
+    const base = parseFloat(getComputedStyle(title).fontSize) || 15;
+    let size = base;
+    for (let i = 0; i < 5 && title.scrollWidth > title.clientWidth + 1; i++) {
+      size = Math.round((size - base * 0.07) * 10) / 10;
+      title.style.fontSize = size + 'px';
+    }
   }
 
   // Phone layout: the detailed stats and the log live in a popup instead of a side panel.
@@ -551,20 +566,20 @@ export class UI {
         if (box.dataset.gid !== 'none') {
           box.dataset.gid = 'none';
           box.className = `goal goal-${side} none`;
-          box.innerHTML = `<div class="goal-side">${SIDE_ARROW[side]} ${SIDE_LABEL[side]}</div><div class="goal-name">No goal</div><div class="goal-desc">Enable goals in Settings</div>`;
+          box.innerHTML = `<div class="goal-name">No goal</div><div class="goal-desc">Enable goals in Settings</div><div class="goal-meta"></div><div class="goal-bar"></div>`;
         }
         continue;
       }
       if (box.dataset.gid !== String(goal.id)) {
         box.dataset.gid = String(goal.id);
         box.className = `goal goal-${side}`;
-        box.innerHTML = `<div class="goal-side">${SIDE_ARROW[side]} ${SIDE_LABEL[side]}</div>` +
-          `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}${goalFlagsHTML(goal.def, s)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
+        box.innerHTML = `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}${goalFlagsHTML(goal.def, s)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
           `<div class="goal-desc">${esc(goalDesc(goal.def, s))}</div>` +
           `<div class="goal-meta"><span class="pts">${goalPoints(goal.def, s)} pts</span><span class="timer-text"></span></div>` +
           `<div class="goal-bar"><div class="goal-bar-fill"></div></div>` +
           this.goalActionsHTML();
         box.title = `${goal.def.name}: ${goalDetail(goal.def, s)} Tap for details.`;
+        this.fitGoalTitle(box);
       }
       const cnt = box.querySelector('.goal-count');
       if (cnt) cnt.textContent = goalCountText(goal.def, s, g);

@@ -112,6 +112,10 @@ Card sums use pips: ace 1, faces 10. Straights allow ace low or high, no wrap-ar
 
 Every goal shows a badge with a shape icon (snake = chain, grid = connected group, crossed arrows = straight line, ↔ = whole row, ↕ = whole column) and the number of cards it takes; for rows and columns that number is the live length between the walls. Goals also belong to a family (matching ranks, runs, suits, sums, colors, rank tiers, variety, filling), and by default two goals from one family never sit on the walls at the same time, so the four active goals always feel distinct. Tap a goal for its precise wording and for the ward actions.
 
+Goals are dealt from a shuffled deck of the enabled pool, so no goal comes back until every other enabled goal has had its turn (Fill a Row and Fill a Column are exempt and can return sooner), and a goal that clears or expires is never replaced by the very same goal. Turn *Cycle through every enabled goal* off in Settings for plain random draws.
+
+The four goal cards are identical rectangles, as long as the starting grid and as thick as the wall band, with fixed rows for the name, description, points and timer, progress bar, and ward buttons, so nothing on a card moves when its goal changes or the walls close in. The side cards are turned to lie along their walls (left reads bottom-up, right reads top-down).
+
 ## Code layout
 
 ```

@@ -244,38 +244,38 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .wall.hit { animation: wallHit .5s; }
 
 .goal {
-  position: absolute; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; gap: 3px; padding: 5px 8px; border-radius: 12px; cursor: pointer;
+  position: absolute; z-index: 4; cursor: pointer; border-radius: 12px; padding: 6px 8px 5px;
+  /* Fixed rows (name, description, points/timer, bar, buttons) so nothing shifts as goals change. */
+  display: grid; grid-template-rows: 20px 28px 14px 5px 22px; row-gap: 3px; align-items: start; justify-items: stretch;
+  text-align: center; box-sizing: border-box; overflow: hidden;
   background: rgba(8, 11, 17, .62); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 4px 14px rgba(0,0,0,.35);
 }
-/* The cards keep a constant size at the arena's edges; the stone thickens toward the grid beneath them. */
+/* All four cards are the same rectangle: as long as the starting grid, as thick as the wall band.
+   The side cards are turned to lie along their walls (left reads bottom-up, right reads top-down). */
 .goal-top, .goal-bottom {
-  left: 50%; transform: translateX(-50%);
-  width: max(260px, calc(var(--cols) * var(--cell)));
-  height: calc(var(--wall-tb) - 12px);
+  left: var(--wall-lr); width: calc(var(--cols) * var(--cell)); height: calc(var(--wall-tb) - 12px);
 }
 .goal-top { top: 6px; }
 .goal-bottom { bottom: 6px; }
 .goal-left, .goal-right {
-  top: var(--wall-tb); height: calc(var(--rows) * var(--cell));
-  width: calc(var(--wall-lr) - 12px); padding: 6px 5px;
+  width: calc(var(--rows) * var(--cell)); height: calc(var(--wall-lr) - 12px);
+  top: calc(var(--wall-tb) + (var(--rows) * var(--cell) - (var(--wall-lr) - 12px)) / 2);
 }
-.goal-left { left: 6px; }
-.goal-right { right: 6px; }
+.goal-left { left: calc((var(--wall-lr) - var(--rows) * var(--cell)) / 2); transform: rotate(-90deg); }
+.goal-right { left: calc(var(--wall-lr) + var(--cols) * var(--cell) + (var(--wall-lr) - var(--rows) * var(--cell)) / 2); transform: rotate(90deg); }
 .goal.cleared { animation: goalClear .6s; }
 .goal.expired { animation: goalExpire .6s; }
-.goal-side { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.goal-name { font-weight: 800; font-size: 16px; line-height: 1.1; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px; }
-.goal-left .goal-name, .goal-right .goal-name { font-size: 13.5px; flex-direction: column; gap: 3px; }
+.goal-name { grid-row: 1; height: 20px; font-weight: 800; font-size: 15px; line-height: 1.1; display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; gap: 2px; overflow: hidden; }
+.goal-name .goal-badge, .goal-name .goal-flags { flex: 0 0 auto; }
+.goal-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .goal-top .goal-name { color: var(--top); }
 .goal-right .goal-name { color: var(--right); }
 .goal-bottom .goal-name { color: var(--bottom); }
 .goal-left .goal-name { color: var(--left); }
-.goal-desc { font-size: 11px; color: #c9cfdb; line-height: 1.25; }
-.goal-left .goal-desc, .goal-right .goal-desc { font-size: 10.5px; }
-.goal-meta { display: flex; gap: 10px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.goal-desc { grid-row: 2; font-size: 11px; color: #c9cfdb; line-height: 14px; max-height: 28px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.goal-meta { grid-row: 3; display: flex; gap: 10px; justify-content: center; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 14px; white-space: nowrap; }
 .goal-meta .pts { color: var(--accent); font-weight: 700; }
-.goal-bar { width: 100%; height: 5px; background: rgba(0,0,0,.45); border-radius: 3px; overflow: hidden; }
+.goal-bar { grid-row: 4; width: 100%; height: 5px; background: rgba(0,0,0,.45); border-radius: 3px; overflow: hidden; }
 .goal-bar-fill { height: 100%; width: 100%; border-radius: 3px; transition: width .2s linear; }
 .goal-top .goal-bar-fill { background: var(--top); }
 .goal-right .goal-bar-fill { background: var(--right); }
@@ -284,16 +284,16 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .goal.danger .goal-bar-fill { background: var(--bad) !important; }
 .goal.danger { animation: danger .7s infinite alternate; }
 .goal.none { opacity: .6; }
+.arena.narrow .goal { padding: 4px 6px 3px; grid-template-rows: 18px 0 13px 4px 22px; row-gap: 2px; }
 .arena.narrow .goal-desc { display: none; }
-.arena.narrow .goal-name { font-size: 12.5px; }
-.arena.narrow .goal-left .goal-name, .arena.narrow .goal-right .goal-name { font-size: 11.5px; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
-.arena.narrow .goal { padding: 4px 4px; gap: 2px; }
-.arena.narrow .goal-side { display: none; }
+.arena.narrow .goal-name { font-size: 12.5px; height: 18px; }
+.arena.narrow .goal-meta { line-height: 13px; }
+.arena.narrow .goal-bar { height: 4px; }
 
 /* ---------- goal action buttons ---------- */
-.goal-actions { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 2px; }
+.goal-actions { grid-row: 5; display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 0; }
 .goal-btn {
-  height: 24px; min-width: 28px; padding: 0 7px; border-radius: 8px;
+  height: 22px; min-width: 28px; padding: 0 7px; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center; gap: 3px;
   background: rgba(0,0,0,.42); border: 1px solid rgba(255,255,255,.2); color: var(--text);
   font-size: 10.5px; font-weight: 800; line-height: 1; cursor: pointer;
@@ -311,7 +311,6 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
   font-size: 12px; font-weight: 800; line-height: 1.3; color: inherit; white-space: nowrap;
 }
 .goal-badge svg { width: 14px; height: 14px; flex: 0 0 auto; }
-.goal-left .goal-badge, .goal-right .goal-badge { margin-right: 0; }
 .goal-pop-name .goal-badge { color: var(--text); margin-left: 4px; }
 .fam-tag { display: inline-block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; font-weight: 600; }
 table.goals td.shape .goal-badge { margin: 0; }
@@ -325,7 +324,6 @@ table.goals td.fam .fam-tag { margin: 0 4px 0 0; }
 .flag { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 5px; background: rgba(0,0,0,.38); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); color: var(--text); }
 .flag svg { width: 12px; height: 12px; }
 .flag.off { opacity: .55; }
-.goal-left .goal-flags, .goal-right .goal-flags { margin-right: 0; }
 .arena.narrow .flag { width: 15px; height: 15px; }
 .arena.narrow .flag svg { width: 11px; height: 11px; }
 
@@ -460,12 +458,10 @@ textarea.json { width: 100%; min-height: 130px; background: var(--panel2); color
 @keyframes ghostPoof { to { transform: scale(1.6); opacity: 0; filter: blur(3px); } }
 @keyframes popUp { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -170%) scale(1); } }
 @keyframes wallHit { 0% { filter: brightness(1.8); } 100% { filter: none; } }
-@keyframes goalClear { 0% { background: rgba(126,212,145,.45); transform: translateX(-50%) scale(1.06); } 100% { background: rgba(8,11,17,.62); transform: translateX(-50%); } }
+@keyframes goalClear { 0% { background: rgba(126,212,145,.5); box-shadow: 0 0 0 3px rgba(126,212,145,.6); } 100% { background: rgba(8,11,17,.62); } }
 @keyframes goalExpire { 0% { background: rgba(255,107,107,.45); } 100% { background: rgba(8,11,17,.62); } }
 @keyframes danger { from { background: rgba(8,11,17,.62); } to { background: rgba(255,107,107,.22); } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.goal-left.cleared, .goal-right.cleared { animation-name: goalClearSide; }
-@keyframes goalClearSide { 0% { background: rgba(126,212,145,.45); } 100% { background: rgba(8,11,17,.62); } }
 
 /* ---------- narrow (phone) layout: one screen, no scrolling ---------- */
 body.narrow .layout { flex-direction: column; gap: 6px; padding: 6px 8px 0; }

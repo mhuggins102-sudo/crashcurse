@@ -55,6 +55,8 @@ export class Game {
       wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, refreshes: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0, undos: 0,
     };
     this.buildDeck();
+    this.goalDeck = [];
+    this.buildGoalDeck();
     for (const side of SIDES) this.newGoal(side);
     this.draw();
   }
@@ -451,27 +453,81 @@ export class Game {
     }
   }
 
+  // Every enabled goal (whether or not it currently fits) in a shuffled order.
+  goalPoolAll() {
+    const s = this.s;
+    const deck = s.deckType || 'cards';
+    return GOAL_DEFS.filter((d) => goalDeck(d) === deck && goalEnabled(d, s)
+      && !(s.chainShape === 'group' && d.shape === 'chain' && goalIsOrdered(d, s)));
+  }
+
+  // A fresh shuffled cycle. With keepLeft, cards still waiting in the current
+  // cycle (skipped because they do not fit the board right now) stay in front
+  // of the new cycle instead of being thrown away.
+  buildGoalDeck(keepLeft = false) {
+    const left = keepLeft ? this.goalDeck.filter((id) => GOAL_BY_ID[id] && !GOAL_BY_ID[id].repeatable) : [];
+    const have = new Set(left);
+    this.goalDeck = left.concat(this.rng.shuffle(this.goalPoolAll().map((d) => d.id).filter((id) => !have.has(id))));
+  }
+
+  // First eligible card of the goal deck. Non-repeatable goals leave the deck
+  // when drawn. Repeatable ones (Fill a Row / Column) are only offered once they
+  // have come around to the front, and then go back in a good way down, so they
+  // return now and then without ever taking over. When no non-repeatable goal in
+  // the deck can be offered at all, the next cycle starts.
+  drawFromGoalDeck(ok) {
+    const LOOK = 6, BACK = 20;
+    const live = (id) => { const d = GOAL_BY_ID[id]; return !!d && !d.repeatable && ok(d, false); };
+    if (!this.goalDeck.some(live)) this.buildGoalDeck(true);
+    for (const strict of [true, false]) {
+      for (let i = 0; i < this.goalDeck.length; i++) {
+        const d = GOAL_BY_ID[this.goalDeck[i]];
+        if (!d || (d.repeatable && i >= LOOK) || !ok(d, strict)) continue;
+        this.goalDeck.splice(i, 1);
+        // A used repeatable goes back in at least BACK cards deep; near the end of
+        // a cycle it sits out until the next shuffle instead, so the last few
+        // cards can never turn into Fill a Row / Fill a Column forever.
+        if (d.repeatable && this.goalDeck.length >= BACK) {
+          this.goalDeck.splice(BACK + this.rng.int(this.goalDeck.length - BACK + 1), 0, d.id);
+        }
+        return d;
+      }
+    }
+    return null;
+  }
+
   newGoal(side, { exclude = null, keepTime = null, allowOverflow = false } = {}) {
     const s = this.s;
+    // Never hand a wall the very goal it just had.
+    if (exclude == null && this.goals[side]) exclude = this.goals[side].def.id;
     const others = SIDES.filter((x) => x !== side).map((x) => this.goals[x]).filter(Boolean);
     const activeIds = others.map((g) => g.def.id);
     const activeFamilies = new Set(others.flatMap((g) => goalFamilies(g.def)));
-    const pool = this.goalPool().filter((d) => d.id !== exclude);
-    let candidates = s.allowDuplicateGoals ? pool : pool.filter((d) => !activeIds.includes(d.id));
-    if (s.avoidSimilarGoals) {
-      const distinct = candidates.filter((d) => !goalFamilies(d).some((f) => activeFamilies.has(f)));
-      if (distinct.length) {
-        // Draw a family first, then a goal inside it, so goals in small
-        // families are not offered far more often than goals in big ones.
-        const fams = [...new Set(distinct.flatMap((d) => goalFamilies(d)))];
-        const fam = this.rng.pick(fams);
-        candidates = distinct.filter((d) => goalFamilies(d).includes(fam));
-      }
+    let def = null;
+    if (s.goalCycle) {
+      const ok = (d, strict) => d.id !== exclude && goalFeasible(d, s, this)
+        && (s.allowDuplicateGoals || !activeIds.includes(d.id))
+        && (!strict || !s.avoidSimilarGoals || !goalFamilies(d).some((f) => activeFamilies.has(f)));
+      def = this.drawFromGoalDeck(ok);
     }
-    if (!candidates.length) candidates = pool;
-    if (!candidates.length) candidates = this.goalPool();
-    if (!candidates.length) { this.goals[side] = null; this.emit('goal', { side, id: null }); return; }
-    const def = this.rng.pick(candidates);
+    if (!def) {
+      const pool = this.goalPool().filter((d) => d.id !== exclude);
+      let candidates = s.allowDuplicateGoals ? pool : pool.filter((d) => !activeIds.includes(d.id));
+      if (s.avoidSimilarGoals) {
+        const distinct = candidates.filter((d) => !goalFamilies(d).some((f) => activeFamilies.has(f)));
+        if (distinct.length) {
+          // Draw a family first, then a goal inside it, so goals in small
+          // families are not offered far more often than goals in big ones.
+          const fams = [...new Set(distinct.flatMap((d) => goalFamilies(d)))];
+          const fam = this.rng.pick(fams);
+          candidates = distinct.filter((d) => goalFamilies(d).includes(fam));
+        }
+      }
+      if (!candidates.length) candidates = pool;
+      if (!candidates.length) candidates = this.goalPool();
+      if (!candidates.length) { this.goals[side] = null; this.emit('goal', { side, id: null }); return; }
+      def = this.rng.pick(candidates);
+    }
     let duration = this.goalDuration();
     let timeLeft = duration;
     if (keepTime != null) {
@@ -708,6 +764,7 @@ export class Game {
       levelPlacements: this.levelPlacements, goalBase: this.goalBase, curseCount: this.curseCount, levelLen: this.levelLen,
       levelLeft: this.levelLeft, globalLeft: this.globalLeft, rotateIdx: this.rotateIdx, placementLeft: this.placementLeft,
       status: this.status, overReason: this.overReason, nextId: this.nextId, lastPlaced: this.lastPlaced, prevPlaced: this.prevPlaced,
+      goalDeck: this.goalDeck.slice(),
       stats: JSON.parse(JSON.stringify(this.stats)), rng: this.rng.state(),
     };
   }
@@ -725,6 +782,7 @@ export class Game {
     this.levelLeft = snap.levelLeft; this.globalLeft = snap.globalLeft; this.rotateIdx = snap.rotateIdx; this.placementLeft = snap.placementLeft;
     this.status = snap.status; this.overReason = snap.overReason; this.nextId = snap.nextId; this.lastPlaced = snap.lastPlaced; this.prevPlaced = snap.prevPlaced;
     this.stats = JSON.parse(JSON.stringify(snap.stats));
+    this.goalDeck = (snap.goalDeck || []).slice();
     this.rng.setState(snap.rng);
     this.events = [];
   }

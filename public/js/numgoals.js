@@ -331,9 +331,9 @@ export const NUM_GOALS = [
     desc: () => 'A chain (2–3 tiles) of numbers adding up to a multiple of 9', test: (ts) => sum(ts) % 9 === 0 },
 
   // ---- Full rows & columns ----
-  { id: 'nFillRow', family: ['fill'], name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
+  { id: 'nFillRow', family: ['fill'], repeatable: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
     desc: () => 'Fill every open cell of a row', test: () => true },
-  { id: 'nFillCol', family: ['fill'], name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
+  { id: 'nFillCol', family: ['fill'], repeatable: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
     desc: () => 'Fill every open cell of a column', test: () => true },
   { id: 'nLightRow', family: ['sum'], name: 'Light Row', cat: 'Full rows & columns', shape: 'row', points: 80, minLen: 3,
     desc: () => 'Fill a row whose numbers average 3 or less', test: (ts) => sum(ts) <= 3 * ts.length },

@@ -32,6 +32,7 @@ test('deck has 52 cards plus the configured curses', () => {
 test('placing a card that completes a goal scores, removes the cards and grants a ward', () => {
   const s = onlyGoals(['pair']);
   s.wardsPerClear = 1;
+  s.curseCount = 0;
   const g = new Game(s, 'seed');
   // Only one wall carries a goal, so a pair clears exactly one goal
   g.goals.right = null; g.goals.bottom = null; g.goals.left = null;
@@ -411,4 +412,43 @@ test('a ward can skip the upcoming tiles, dodging a visible curse', () => {
   assert.equal(g2.wardRefresh(), false, 'cost 0 disables the use');
   assert.equal(defaultSettings().undoLimit, 50, 'undo defaults to the unlimited sentinel');
   assert.equal(defaultSettings().wardCostRefresh, 1);
+});
+
+test('goals cycle through the whole pool before repeating, and a wall never gets the same goal back to back', () => {
+  const { GOAL_BY_ID: BY, GOAL_DEFS: DEFS, goalDeck } = awaitGoals;
+  const s = { ...defaultSettings(), deckType: 'num', wallMode: 'off', curseCount: 0, goalCycle: true, gridW: 8, gridH: 8 };
+  const g = new Game(s, 'cycle');
+  const nonRepeatable = DEFS.filter((d) => goalDeck(d) === 'num' && !d.repeatable && s.goalsEnabled[d.id] !== false).length;
+  const seen = [];
+  let prev = g.goals.top.def.id;
+  for (let i = 0; i < 90; i++) {
+    g.newGoal('top');
+    const id = g.goals.top.def.id;
+    assert.notEqual(id, prev, 'a replaced goal differs from the outgoing one');
+    prev = id;
+    seen.push(id);
+  }
+  const counts = {};
+  for (const id of seen) if (!BY[id].repeatable) counts[id] = (counts[id] || 0) + 1;
+  const dupes = Object.entries(counts).filter(([, n]) => n > 1);
+  assert.ok(nonRepeatable > 100, 'the numbered pool is large enough for this test');
+  assert.deepEqual(dupes, [], 'no non-repeatable goal appeared twice within the first cycle');
+  assert.ok(g.goalDeck.includes('nFillRow') || g.goalDeck.includes('nFillCol') || seen.some((id) => BY[id].repeatable), 'repeatable goals stay in the deck');
+  // Keep drawing: the first repeat of a non-repeatable goal only comes once the
+  // cycle is exhausted (the four opening goals came from the same deck, and a
+  // few cards can be held back because they sit on another wall right now).
+  const seenSet = new Set([...seen, ...Object.values(g.goals).map((x) => x.def.id)]);
+  let draws = seen.length, firstRepeatAt = -1;
+  while (firstRepeatAt < 0 && draws < nonRepeatable + 20) {
+    g.newGoal('top');
+    draws++;
+    const id = g.goals.top.def.id;
+    if (!BY[id].repeatable && seenSet.has(id)) firstRepeatAt = draws;
+    seenSet.add(id);
+  }
+  assert.ok(firstRepeatAt >= nonRepeatable - 8, `first repeat came at draw ${firstRepeatAt} of a ${nonRepeatable}-goal pool`);
+  const snap = g.snapshot();
+  g.newGoal('top');
+  g.restore(snap);
+  assert.deepEqual(g.goalDeck, snap.goalDeck, 'undo restores the goal deck too');
 });

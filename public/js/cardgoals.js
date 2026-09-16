@@ -109,9 +109,9 @@ export const CARD_GOALS = [
     desc: () => '3 consecutive ranks in order along a straight row or column', test: isStraightSeq },
 
   // Full rows / columns
-  { id: 'fillRow', family: ['fill'], name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
+  { id: 'fillRow', family: ['fill'], repeatable: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
     desc: () => 'Fill every open cell of a row', test: () => true },
-  { id: 'fillCol', family: ['fill'], name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
+  { id: 'fillCol', family: ['fill'], repeatable: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
     desc: () => 'Fill every open cell of a column', test: () => true },
   { id: 'lightRow', family: ['sum'], name: 'Light Row', cat: 'Full rows & columns', shape: 'row', points: 80,
     desc: (s) => `Fill a row whose pips average ${s.lineLowAvg} or less (sum ≤ ${s.lineLowAvg} × length)`,

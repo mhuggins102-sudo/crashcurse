@@ -62,6 +62,8 @@ export const SETTINGS_SCHEMA = [
       { key: 'lineHighAvg', label: 'Heavy Row: min average pip', type: 'range', min: 7, max: 10, step: 0.5, def: 8.5 },
       { key: 'lineMinLen', label: 'Row/column goals need at least this many open cells', type: 'range', min: 1, max: 6, step: 1, def: 2 },
       { key: 'allowDuplicateGoals', label: 'The same goal may show on two walls', type: 'bool', def: false },
+      { key: 'goalCycle', label: 'Cycle through every enabled goal before any repeats', type: 'bool', def: true,
+        help: 'Goals come from a shuffled deck of the enabled pool. Fill a Row and Fill a Column are exempt and may come around again. A cleared or expired goal is never replaced by the very same goal.' },
       { key: 'avoidSimilarGoals', label: 'Keep similar goals off the walls at the same time', type: 'bool', def: true,
         help: 'Goals belong to families (matching ranks, runs, suits, sums, colors, rank tiers, variety, filling). With this on, two goals from one family never show together.' },
       { key: 'noLegalPlacement', label: 'Drawn card has no legal cell', type: 'select', def: 'gameover',

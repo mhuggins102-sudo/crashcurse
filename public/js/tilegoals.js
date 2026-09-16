@@ -126,9 +126,9 @@ export const TILE_GOALS = [
     test: (ts) => ts[0].color === ts[2].color && ts[1].color !== ts[0].color },
 
   // ---- Full rows & columns ----
-  { id: 'tFillRow', family: ['fill'], name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
+  { id: 'tFillRow', family: ['fill'], repeatable: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
     desc: () => 'Fill every open cell of a row', test: () => true },
-  { id: 'tFillCol', family: ['fill'], name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
+  { id: 'tFillCol', family: ['fill'], repeatable: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
     desc: () => 'Fill every open cell of a column', test: () => true },
   { id: 'tCheckeredRow', family: ['pattern'], name: 'Checkered Row', cat: 'Full rows & columns', shape: 'row', points: 120, minLen: 3,
     desc: () => 'Fill a row alternating two colors', test: twoColorAlternating },
