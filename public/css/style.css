@@ -161,6 +161,7 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 @keyframes pickPulse { from { transform: scale(1); } to { transform: scale(1.05); } }
 .goal.choosing { box-shadow: inset 0 0 0 2px var(--accent), 0 0 18px rgba(255,209,102,.35), 0 4px 14px rgba(0,0,0,.35); }
 .chooser { display: flex; flex-direction: column; gap: 6px; min-width: 170px; }
+.chooser[hidden] { display: none; }
 .chooser-head { display: flex; align-items: center; gap: 4px; font-weight: 800; font-size: 14px; line-height: 1.1; }
 .chooser-goal { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chooser-goal.s-top { color: var(--top); } .chooser-goal.s-right { color: var(--right); }

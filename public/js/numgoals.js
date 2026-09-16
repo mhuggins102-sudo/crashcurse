@@ -1,6 +1,9 @@
 // Goals for the numbered-tile deck. Pieces are {kind:'num', color 0..c-1, n 1..max}.
 import { allPieces, neighbors, rowIdxs, colIdxs, openRows, openCols, perimeterIdxs, isStraightIdxs, turnsEveryStep } from './shapes.js';
 
+// A cell counts as filled for the plain fill goals: a tile, or (by default) a curse too.
+const filled = (b, s, i) => !!b.cells[i] && (b.cells[i].kind !== 'curse' || !!s.cursesFill);
+
 const nums = (ts) => ts.map((t) => t.n);
 const sum = (ts) => nums(ts).reduce((a, b) => a + b, 0);
 const product = (ts) => nums(ts).reduce((a, b) => a * b, 1);
@@ -331,9 +334,9 @@ export const NUM_GOALS = [
     desc: () => 'A chain (2–3 tiles) of numbers adding up to a multiple of 9', test: (ts) => sum(ts) % 9 === 0 },
 
   // ---- Full rows & columns ----
-  { id: 'nFillRow', family: ['fill'], repeatable: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
+  { id: 'nFillRow', family: ['fill'], repeatable: true, cursesFill: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
     desc: () => 'Fill every open cell of a row', test: () => true },
-  { id: 'nFillCol', family: ['fill'], repeatable: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
+  { id: 'nFillCol', family: ['fill'], repeatable: true, cursesFill: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
     desc: () => 'Fill every open cell of a column', test: () => true },
   { id: 'nLightRow', family: ['sum'], name: 'Light Row', cat: 'Full rows & columns', shape: 'row', points: 80, minLen: 3,
     desc: () => 'Fill a row whose numbers average 3 or less', test: (ts) => sum(ts) <= 3 * ts.length },
@@ -518,37 +521,37 @@ export const NUM_GOALS = [
     desc: () => 'Four in a straight line adding up to 20', test: (ts) => sum(ts) === 20 },
 
   // ---- Board-wide & big shapes ----
-  { id: 'nCleanSweep', family: ['board', 'fill'], name: 'Clean Sweep', cat: 'Board-wide', shape: 'board', count: 0, countText: 'all', points: 500,
+  { id: 'nCleanSweep', family: ['board', 'fill'], cursesFill: true, name: 'Clean Sweep', cat: 'Board-wide', shape: 'board', count: 0, countText: 'all', points: 500,
     desc: () => 'Fill every open cell between the walls; the whole board clears',
     find: (b, s, placedIdx, must) => {
       const idxs = [];
-      for (const r of openRows(b)) for (const i of rowIdxs(b, r)) { if (!b.cells[i] || b.cells[i].kind === 'curse') return null; idxs.push(i); }
+      for (const r of openRows(b)) for (const i of rowIdxs(b, r)) { if (!filled(b, s, i)) return null; idxs.push(i); }
       return idxs.length ? idxs : null;
     } },
-  { id: 'nPictureFrame', family: ['board', 'fill'], name: 'Picture Frame', cat: 'Board-wide', shape: 'board', count: 0, countText: 'edge', points: 300,
+  { id: 'nPictureFrame', family: ['board', 'fill'], cursesFill: true, name: 'Picture Frame', cat: 'Board-wide', shape: 'board', count: 0, countText: 'edge', points: 300,
     desc: () => 'Fill every cell along the border of the open board; the frame clears',
     feasible: (s, b) => (b.H - b.inset.top - b.inset.bottom) >= 3 && (b.W - b.inset.left - b.inset.right) >= 3,
     find: (b, s, placedIdx, must) => {
       const per = perimeterIdxs(b);
-      if (per.length < 4 || per.some((i) => !b.cells[i] || b.cells[i].kind === 'curse')) return null;
+      if (per.length < 4 || per.some((i) => !filled(b, s, i))) return null;
       if (must && placedIdx != null && !per.includes(placedIdx)) return null;
       return per;
     } },
-  { id: 'nCrossroads', family: ['board', 'fill'], name: 'Crossroads', cat: 'Board-wide', shape: 'board', count: 0, countText: '+', points: 200,
+  { id: 'nCrossroads', family: ['board', 'fill'], cursesFill: true, name: 'Crossroads', cat: 'Board-wide', shape: 'board', count: 0, countText: '+', points: 200,
     desc: () => 'Complete a full row and a full column that cross at the placed tile; both clear',
     feasible: (s, b) => (b.H - b.inset.top - b.inset.bottom) >= 2 && (b.W - b.inset.left - b.inset.right) >= 2,
     find: (b, s, placedIdx, must) => {
-      const full = (idxs) => idxs.length >= 2 && idxs.every((i) => b.cells[i] && b.cells[i].kind !== 'curse');
+      const full = (idxs) => idxs.length >= 2 && idxs.every((i) => filled(b, s, i));
       const tryCell = (i) => { const r = (i / b.W) | 0, c = i % b.W; const ri = rowIdxs(b, r), ci = colIdxs(b, c); return full(ri) && full(ci) ? [...new Set([...ri, ...ci])] : null; };
       if (must && placedIdx != null) return tryCell(placedIdx);
       for (const i of allPieces(b)) { const f = tryCell(i); if (f) return f; }
       return null;
     } },
-  { id: 'nDoubleDecker', family: ['board', 'fill'], name: 'Double Decker', cat: 'Board-wide', shape: 'board', count: 0, countText: '2 rows', points: 250,
+  { id: 'nDoubleDecker', family: ['board', 'fill'], cursesFill: true, name: 'Double Decker', cat: 'Board-wide', shape: 'board', count: 0, countText: '2 rows', points: 250,
     desc: () => 'Complete two neighbouring full rows, one of them holding the placed tile; both clear',
     feasible: (s, b) => (b.H - b.inset.top - b.inset.bottom) >= 2 && (b.W - b.inset.left - b.inset.right) >= 2,
     find: (b, s, placedIdx, must) => {
-      const full = (r) => { const idxs = rowIdxs(b, r); return idxs.length >= 2 && idxs.every((i) => b.cells[i] && b.cells[i].kind !== 'curse') ? idxs : null; };
+      const full = (r) => { const idxs = rowIdxs(b, r); return idxs.length >= 2 && idxs.every((i) => filled(b, s, i)) ? idxs : null; };
       const rows = openRows(b);
       const cand = must && placedIdx != null ? [(placedIdx / b.W) | 0] : rows;
       for (const r of cand) for (const r2 of [r - 1, r + 1]) {
@@ -671,8 +674,8 @@ export const NUM_DETAILS = {
   nTriples: () => 'A chain of 3 connected tiles that are all multiples of 3: 3, 6 or 9. Colors do not matter.',
   nSquares: () => 'A chain of 3 connected tiles that are all square numbers: 1, 4 or 9. Colors do not matter.',
   nNines: () => 'A chain of 2 or 3 connected tiles whose numbers add up to 9, 18 or 27 (4+5, 2+7, 3+6+9, 9+9…). Colors do not matter.',
-  nFillRow: () => 'Every open cell of one row, from wall to wall, holds a tile. A curse in the row blocks it.',
-  nFillCol: () => 'Every open cell of one column, from wall to wall, holds a tile. A curse in the column blocks it.',
+  nFillRow: (s) => (s.cursesFill ? 'Every open cell of one row, from wall to wall, holds a tile or a curse. The row clears and every curse in it is lifted.' : 'Every open cell of one row, from wall to wall, holds a tile. A curse in the row blocks it.'),
+  nFillCol: (s) => (s.cursesFill ? 'Every open cell of one column, from wall to wall, holds a tile or a curse. The column clears and every curse in it is lifted.' : 'Every open cell of one column, from wall to wall, holds a tile. A curse in the column blocks it.'),
   nLightRow: () => 'A completely filled row (wall to wall) whose numbers add up to at most 3 × the row length, so they average 3 or less.',
   nHeavyRow: () => 'A completely filled row (wall to wall) whose numbers add up to at least 7 × the row length, so they average 7 or more.',
   nRoundRow: () => 'A completely filled row (wall to wall) whose numbers add up to a multiple of 10 (10, 20, 30…).',
@@ -752,10 +755,10 @@ export const NUM_DETAILS = {
   nElbow: () => 'A chain of 3 connected tiles of one color that bends: an L shape, not three in a straight line. Numbers do not matter.',
   nWiggle: () => 'A chain of 4 connected tiles that changes direction at every step (a zigzag or a hook). Colors and numbers do not matter at all.',
   nStraightFour: () => 'Four tiles side by side in a single row or column adding up to exactly 20. Colors do not matter.',
-  nCleanSweep: () => 'Every open cell between the walls holds a tile, no gaps and no curses. The whole board clears at once.',
-  nPictureFrame: () => 'Every cell along the outer edge of the open board (the ring just inside the walls) holds a tile. The tile you just placed must be part of the ring, and the ring clears.',
-  nCrossroads: () => 'The row and the column that cross at the tile you just placed are both completely filled (wall to wall). Both lines clear.',
-  nDoubleDecker: () => 'The row holding the tile you just placed and a row directly above or below it are both completely filled (wall to wall). Both rows clear.',
+  nCleanSweep: (s) => (s.cursesFill ? 'Every open cell between the walls holds a tile or a curse. The whole board clears and every curse is lifted.' : 'Every open cell between the walls holds a tile. The whole board clears; a curse anywhere blocks it.'),
+  nPictureFrame: (s) => (s.cursesFill ? 'Every cell along the border of the open board (just inside the walls) holds a tile or a curse, and the tile you just placed is on that border. The frame clears and its curses are lifted.' : 'Every cell along the border of the open board (just inside the walls) holds a tile, and the tile you just placed is on that border. The frame clears; a curse on it blocks it.'),
+  nCrossroads: (s) => (s.cursesFill ? 'The row and the column through the tile you just placed are both completely filled (wall to wall), curses counting as filled. Both clear and their curses are lifted.' : 'The row and the column through the tile you just placed are both completely filled (wall to wall) with tiles. Both clear; a curse in either blocks it.'),
+  nDoubleDecker: (s) => (s.cursesFill ? 'The row holding the tile you just placed and a row directly above or below it are both completely filled (wall to wall), curses counting as filled. Both rows clear and their curses are lifted.' : 'The row holding the tile you just placed and a row directly above or below it are both completely filled (wall to wall) with tiles. Both rows clear; a curse in either blocks it.'),
   nNumberStack: () => 'A completely filled column (wall to wall) in which every tile shows the same number. Only offered while the column is at least 3 long.',
   nFullSpectrum: (s) => `Tiles showing the number you just placed are present in all ${s.numColors} colors somewhere between the walls. Every tile of that number clears.`,
   nDeluge: () => 'At least nine tiles of the same color anywhere between the walls. The tile you just placed must be that color, and every tile of that color clears at once.',

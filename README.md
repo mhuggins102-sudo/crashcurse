@@ -118,7 +118,7 @@ points = round( sum of base points × comboMult^(goals − 1) × (1 + streak × 
 
 - **Chain** goals accept any orthogonally connected snake of exactly N cards that includes the card you just placed. Bends are fine; a branch (a plus shape) is not a snake. Switch *Chain shape* to "any connected group" to allow branches.
 - **Straight line** goals need N cards in one row or column segment.
-- **Row / column** goals need every open cell of that row or column (between the current walls) filled, so they get easier as the walls close in.
+- **Row / column** goals need every open cell of that row or column (between the current walls) filled, so they get easier as the walls close in. For the plain fill goals (Fill a Row, Fill a Column, Double Decker, Crossroads, Picture Frame, Clean Sweep) a curse counts as a filled cell by default and is lifted when the goal clears, which is one more way to get curses off the board; *Curses count as filled cells for fill goals* switches that off.
 - **Block** goals need a 2×2 square; **plus** goals a centre and its four side neighbours; **board-wide** goals count matching tiles anywhere between the walls and clear all of them at once.
 - A goal that can no longer fit between the walls (a Rainbow Row on a 4-wide board, a plus on a 2-row board) is never offered, and an active one is swapped for free when a wall makes it impossible.
 

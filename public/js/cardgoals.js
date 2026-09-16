@@ -109,9 +109,9 @@ export const CARD_GOALS = [
     desc: () => '3 consecutive ranks in order along a straight row or column', test: isStraightSeq },
 
   // Full rows / columns
-  { id: 'fillRow', family: ['fill'], repeatable: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
+  { id: 'fillRow', family: ['fill'], repeatable: true, cursesFill: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
     desc: () => 'Fill every open cell of a row', test: () => true },
-  { id: 'fillCol', family: ['fill'], repeatable: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
+  { id: 'fillCol', family: ['fill'], repeatable: true, cursesFill: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
     desc: () => 'Fill every open cell of a column', test: () => true },
   { id: 'lightRow', family: ['sum'], name: 'Light Row', cat: 'Full rows & columns', shape: 'row', points: 80,
     desc: (s) => `Fill a row whose pips average ${s.lineLowAvg} or less (sum ≤ ${s.lineLowAvg} × length)`,
@@ -152,8 +152,8 @@ export const CARD_DETAILS = {
   parity: () => 'A chain of 3 connected cards whose ranks are all odd (A, 3, 5, 7, 9, J, K) or all even (2, 4, 6, 8, 10, Q). Ace counts 1, jack 11, queen 12, king 13.',
   suitedLine: () => 'Three cards of one suit side by side in a single row or a single column. No bends allowed.',
   rankLadder: () => 'Three cards side by side in a single row or column whose ranks step by exactly one, in order (5-6-7 or 7-6-5). The ace can be low (A-2-3) or high (Q-K-A).',
-  fillRow: () => 'Every open cell of one row, from wall to wall, holds a card. A curse in the row blocks it.',
-  fillCol: () => 'Every open cell of one column, from wall to wall, holds a card. A curse in the column blocks it.',
+  fillRow: (s) => (s.cursesFill ? 'Every open cell of one row, from wall to wall, holds a card or a curse. The row clears and every curse in it is lifted.' : 'Every open cell of one row, from wall to wall, holds a card. A curse in the row blocks it.'),
+  fillCol: (s) => (s.cursesFill ? 'Every open cell of one column, from wall to wall, holds a card or a curse. The column clears and every curse in it is lifted.' : 'Every open cell of one column, from wall to wall, holds a card. A curse in the column blocks it.'),
   lightRow: (s) => `A completely filled row (wall to wall) whose pips add up to at most ${s.lineLowAvg} × the row length, so the cards average ${s.lineLowAvg} pips or less. Number cards count face value, J/Q/K count 10, aces count 1.`,
   heavyRow: (s) => `A completely filled row (wall to wall) whose pips add up to at least ${s.lineHighAvg} × the row length, so the cards average ${s.lineHighAvg} pips or more. Number cards count face value, J/Q/K count 10, aces count 1.`,
   monoRow: () => 'A completely filled row (wall to wall) in which every card is the same color.',

@@ -249,6 +249,19 @@ test('board goals: clean sweep, picture frame, crossroads, double decker, full s
   assert.equal(find(cross, s, 'nCrossroads', 1), null, 'the placed tile must be at the crossing');
   const decker = numBoard(['R1 B2 G3', 'B4 R5 G6', '.. .. ..']);
   assert.equal(find(decker, s, 'nDoubleDecker', 0).length, 6);
+  // curses count as filled cells for the fill goals, and are part of the cleared set
+  const cursed = numBoard(['R1 B2 G3', 'B4 R5 G6', '.. .. ..']);
+  cursed.cells[4] = { kind: 'curse' };
+  assert.equal(find(cursed, s, 'nDoubleDecker', 0).length, 6);
+  assert.ok(find(cursed, s, 'nDoubleDecker', 0).includes(4));
+  assert.equal(find(cursed, numSettings({ numColors: 3, lineMinLen: 2, cursesFill: false }), 'nDoubleDecker', 0), null);
+  const cursedFrame = numBoard(['R1 XX G3', 'B4 .. G6', 'G7 B8 R9']);
+  cursedFrame.cells[1] = { kind: 'curse' };
+  assert.equal(find(cursedFrame, s, 'nPictureFrame', 0).length, 8);
+  assert.equal(find(cursedFrame, s, 'nCleanSweep', 0), null, 'the middle cell is still empty');
+  const cursedCross = numBoard(['.. B2 ..', 'B4 R5 G6', '.. B8 ..']);
+  cursedCross.cells[3] = { kind: 'curse' };
+  assert.equal(find(cursedCross, s, 'nCrossroads', 4).length, 5);
   const spectrum = numBoard(['R7 .. B7', '.. G7 ..', '.. .. ..']);
   assert.equal(find(spectrum, s, 'nFullSpectrum', 4).length, 3);
   assert.equal(find(spectrum, s, 'nFullSpectrum', 0) && find(numBoard(['R7 .. B7']), s, 'nFullSpectrum', 0), null);

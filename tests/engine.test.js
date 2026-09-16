@@ -574,3 +574,30 @@ test('timers do not run while a choice is pending', () => {
   assert.equal(g.goals.top.timeLeft, left);
   assert.equal(g.elapsed, elapsed);
 });
+
+test('clearing a fill goal through a curse lifts the curse', () => {
+  const s = onlyGoals(['fillRow']);
+  s.gridW = 3; s.gridH = 3; s.curseCount = 0; s.lineMinLen = 2;
+  const g = new Game(s, 'fillcurse');
+  g.goals.top = { def: GOAL_BY_ID.fillRow, side: 'top', duration: 40, timeLeft: 40, id: 1 };
+  g.goals.right = null; g.goals.bottom = null; g.goals.left = null;
+  g.cells.fill(null);
+  g.cells[0] = makeCard(2, 0, 1); g.cells[1] = { kind: 'curse', id: 777 };
+  g.current = makeCard(3, 1, 2);
+  const discardBefore = g.discard.length;
+  g.place(2);
+  assert.equal(g.cells[0], null); assert.equal(g.cells[1], null); assert.equal(g.cells[2], null);
+  assert.equal(g.stats.cursesRemoved, 1);
+  assert.equal(g.discard.length, discardBefore + 3, 'the curse goes back to the discards (removed curses return)');
+  const ev = g.drain().find((e) => e.type === 'clear');
+  assert.equal(ev.removed.filter((r) => r.card.kind === 'curse').length, 1);
+  const off = { ...s, cursesFill: false };
+  const g2 = new Game(off, 'fillcurse');
+  g2.goals.top = { def: GOAL_BY_ID.fillRow, side: 'top', duration: 40, timeLeft: 40, id: 1 };
+  g2.goals.right = null; g2.goals.bottom = null; g2.goals.left = null;
+  g2.cells.fill(null);
+  g2.cells[0] = makeCard(2, 0, 1); g2.cells[1] = { kind: 'curse', id: 777 };
+  g2.current = makeCard(3, 1, 2);
+  g2.place(2);
+  assert.ok(g2.cells[1], 'with the rule off the curse blocks the row');
+});

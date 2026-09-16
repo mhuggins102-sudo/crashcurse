@@ -820,11 +820,12 @@ export class UI {
         case 'clear': {
           const names = ev.clears.map((c) => c.name).join(' + ');
           const word = (ev.source === 'wall' ? 'WALL CLEAR! ' : '') + (ev.n >= 2 ? `${COMBO_WORDS[Math.min(ev.n, 4)]} COMBO! ` : '');
-          this.toast(`${word}${names}  +${ev.points}`, ev.n >= 2 ? 'great' : 'good');
+          const lifted = ev.removed.filter((r) => r.card && r.card.kind === 'curse').length;
+          this.toast(`${word}${names}  +${ev.points}${lifted ? ` · ${lifted} curse${lifted > 1 ? 's' : ''} lifted` : ''}`, ev.n >= 2 ? 'great' : 'good');
           const bonus = [];
           if (ev.comboMult > 1) bonus.push(`combo ×${ev.comboMult}`);
           if (ev.streakMult > 1) bonus.push(`streak ×${ev.streakMult.toFixed(2).replace(/\.?0+$/, '')}`);
-          this.log(`${word}${names} +${ev.points}${bonus.length ? ` (${bonus.join(', ')})` : ''}`, ev.n >= 2 ? 'great' : 'good');
+          this.log(`${word}${names} +${ev.points}${bonus.length ? ` (${bonus.join(', ')})` : ''}${lifted ? ` · ${lifted} curse${lifted > 1 ? 's' : ''} lifted` : ''}`, ev.n >= 2 ? 'great' : 'good');
           for (const r of ev.removed) this.ghost(r.idx, r.card, 'clear');
           if (!ev.removed.length) for (const c of ev.clears) for (const i of c.cells) this.flashCell(i, 'pop');
           this.pop(ev.placedIdx, `+${ev.points}`, ev.n >= 2 ? 'big' : '');
@@ -1311,6 +1312,7 @@ export class UI {
     lines.push(`Chains are ${s.chainShape === 'path' ? 'snake paths (bends allowed, no branching)' : 'any connected group'}.${s.deckType === 'cards' ? ` Straights are ${s.straightLen} cards${s.straightOrdered ? ' and must run in order' : ''}; flushes are ${s.flushLen} cards.` : ''}`);
     lines.push(`${s.mustIncludePlaced ? `The ${w} you just placed must be part of the goal you complete.` : 'Any placement clears a goal the board already satisfies.'} ${s.clearedCardsRemoved ? `Cleared ${w}s leave the board.` : `Cleared ${w}s stay on the board.`}`);
     if (s.chooseClears) lines.push(`When more than one set of ${w}s could clear a goal, the game waits and lets you tap which ${w}s to use.`);
+    if (s.cursesFill) lines.push('Fill goals (Fill a Row, Fill a Column, Double Decker, Crossroads, Picture Frame, Clean Sweep) count curses as filled cells and lift them when they clear.');
     lines.push(`Each clear earns ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'}; ${s.wardSpend === 'manual' ? 'click a curse to spend one' : 'they are spent automatically on a random curse'}.`);
     const perks = [];
     if (s.perkExtraWard) perks.push('an extra ward');

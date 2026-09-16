@@ -34,6 +34,8 @@ export const SETTINGS_SCHEMA = [
         help: 'Evenly spaced guarantees a steady drip of curses instead of clumps.' },
       { key: 'cursesReturn', label: 'Removed curses return to the discard pile', type: 'bool', def: true,
         help: 'Off means every curse you clear is gone for good. On keeps curse density constant when the deck reshuffles.' },
+      { key: 'cursesFill', label: 'Curses count as filled cells for fill goals', type: 'bool', def: true,
+        help: 'Fill a Row, Fill a Column, Double Decker, Crossroads, Picture Frame and Clean Sweep accept a curse as a filled cell, and every curse inside the completed shape is lifted when it clears. Goals that look at numbers or colors still need real tiles.' },
       { key: 'crushedCurses', label: 'When a wall crushes a curse', type: 'select', def: 'destroyed',
         options: [['destroyed', 'It leaves the board'], ['relocate', 'It jumps to a random open cell']],
         help: 'A crushed curse that leaves the board follows "Removed curses return to the discard pile": into the discards for the next reshuffle, or gone for good.' },

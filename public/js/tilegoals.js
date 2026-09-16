@@ -126,9 +126,9 @@ export const TILE_GOALS = [
     test: (ts) => ts[0].color === ts[2].color && ts[1].color !== ts[0].color },
 
   // ---- Full rows & columns ----
-  { id: 'tFillRow', family: ['fill'], repeatable: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
+  { id: 'tFillRow', family: ['fill'], repeatable: true, cursesFill: true, name: 'Fill a Row', cat: 'Full rows & columns', shape: 'row', points: 30,
     desc: () => 'Fill every open cell of a row', test: () => true },
-  { id: 'tFillCol', family: ['fill'], repeatable: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
+  { id: 'tFillCol', family: ['fill'], repeatable: true, cursesFill: true, name: 'Fill a Column', cat: 'Full rows & columns', shape: 'col', points: 30,
     desc: () => 'Fill every open cell of a column', test: () => true },
   { id: 'tCheckeredRow', family: ['pattern'], name: 'Checkered Row', cat: 'Full rows & columns', shape: 'row', points: 120, minLen: 3,
     desc: () => 'Fill a row alternating two colors', test: twoColorAlternating },
@@ -217,8 +217,8 @@ export const TILE_DETAILS = {
   tCheckeredLine: () => 'Four tiles side by side in a single row or column alternating exactly two colors: A, B, A, B. Symbols do not matter.',
   tMarkedLine: () => 'Three marked tiles side by side in a single row or column. Colors and symbols do not need to match.',
   tSandwich: () => 'Three tiles side by side in a single row or column where the two outer tiles share a color and the middle tile is a different color.',
-  tFillRow: () => 'Every open cell of one row, from wall to wall, holds a tile. A curse in the row blocks it.',
-  tFillCol: () => 'Every open cell of one column, from wall to wall, holds a tile. A curse in the column blocks it.',
+  tFillRow: (s) => (s.cursesFill ? 'Every open cell of one row, from wall to wall, holds a tile or a curse. The row clears and every curse in it is lifted.' : 'Every open cell of one row, from wall to wall, holds a tile. A curse in the row blocks it.'),
+  tFillCol: (s) => (s.cursesFill ? 'Every open cell of one column, from wall to wall, holds a tile or a curse. The column clears and every curse in it is lifted.' : 'Every open cell of one column, from wall to wall, holds a tile. A curse in the column blocks it.'),
   tCheckeredRow: () => 'A completely filled row (wall to wall) that alternates exactly two colors from left to right: A, B, A, B… Symbols do not matter.',
   tCheckeredCol: () => 'A completely filled column (wall to wall) that alternates exactly two colors from top to bottom. Symbols do not matter.',
   tMotleyRow: () => 'A completely filled row (wall to wall) in which no two neighbouring tiles share a color. Any number of colors may appear.',

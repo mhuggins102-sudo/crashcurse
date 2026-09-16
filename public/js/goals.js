@@ -175,8 +175,9 @@ function enumerateSatisfying(b, s, def, placedIdx, onFound) {
     case 'col':
     case 'rowcol': {
       const minLen = goalMinLen(def, s);
-      const tryRow = (r) => { const idxs = rowIdxs(b, r); return fullLine(b, idxs, minLen) && cb(idxs); };
-      const tryCol = (c) => { const idxs = colIdxs(b, c); return fullLine(b, idxs, minLen) && cb(idxs); };
+      const cursesOk = !!def.cursesFill && !!s.cursesFill;
+      const tryRow = (r) => { const idxs = rowIdxs(b, r); return fullLine(b, idxs, minLen, cursesOk) && cb(idxs); };
+      const tryCol = (c) => { const idxs = colIdxs(b, c); return fullLine(b, idxs, minLen, cursesOk) && cb(idxs); };
       const wantRow = def.shape !== 'col', wantCol = def.shape !== 'row';
       if (must) {
         const r = (placedIdx / b.W) | 0, c = placedIdx % b.W;

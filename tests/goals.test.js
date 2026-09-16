@@ -124,11 +124,14 @@ test('rows respect the walls: only open cells count, and lineMinLen applies', ()
   assert.equal(find(b, strict, 'fillRow', idx(b, 1, 1)), null);
 });
 
-test('curses block rows and chains', () => {
+test('curses count as filled cells for fill goals (unless switched off) but never join chains', () => {
   const b = board(['2H XX 3H']);
   const s = settings();
-  assert.equal(find(b, s, 'fillRow', 0), null);
+  assert.deepEqual(find(b, s, 'fillRow', 0), [0, 1, 2], 'the curse fills its cell and is part of the cleared row');
   assert.equal(find(b, s, 'pair', 0), null);
+  const off = settings({ cursesFill: false });
+  assert.equal(find(b, off, 'fillRow', 0), null);
+  assert.equal(find(board(['2H XX 3H']), s, 'heavyRow', 0), null, 'goals that read the cards still need real cards');
 });
 
 test('straight-line goals need a straight segment', () => {

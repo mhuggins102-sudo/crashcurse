@@ -250,8 +250,9 @@ export function allPluses(b, cb) {
   return false;
 }
 
-export function fullLine(b, idxs, minLen) {
-  return idxs.length >= Math.max(1, minLen || 1) && idxs.every((i) => isPiece(b, i));
+// With cursesOk, a curse counts as a filled cell (plain fill goals).
+export function fullLine(b, idxs, minLen, cursesOk = false) {
+  return idxs.length >= Math.max(1, minLen || 1) && idxs.every((i) => (cursesOk ? b.cells[i] != null : isPiece(b, i)));
 }
 
 // Diagonal segments of N pieces containing idx (both diagonal directions).
