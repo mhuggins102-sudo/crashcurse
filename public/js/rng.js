@@ -25,6 +25,8 @@ export function makeRng(seed) {
   };
   rng.int = (n) => Math.floor(rng() * n);
   rng.pick = (arr) => (arr.length ? arr[Math.floor(rng() * arr.length)] : undefined);
+  rng.state = () => a >>> 0;
+  rng.setState = (v) => { a = v >>> 0; };
   rng.shuffle = (arr) => {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));

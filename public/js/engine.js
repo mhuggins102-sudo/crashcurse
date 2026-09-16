@@ -3,7 +3,7 @@
 
 import { makeRng, hashSeed, randomSeedString } from './rng.js';
 import { makeCard, makeTile, makeNum, makeCurse, pieceKey } from './cards.js';
-import { GOAL_DEFS, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies, goalFeasible, goalDeck } from './goals.js';
+import { GOAL_DEFS, GOAL_BY_ID, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies, goalFeasible, goalDeck } from './goals.js';
 
 export const OVER_REASONS = {
   nospace: 'No empty cell for the drawn card',
@@ -45,12 +45,14 @@ export class Game {
     this.placementLeft = 0;
     this.status = 'playing';
     this.overReason = '';
+    this.lastPlaced = null;   // { idx, piece } of the most recent placement
+    this.prevPlaced = null;   // the placement before that (for Echo / Encore)
     this.events = [];
     this.stats = {
       placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
       multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
       wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
-      wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0,
+      wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0, undos: 0,
     };
     this.buildDeck();
     for (const side of SIDES) this.newGoal(side);
@@ -228,6 +230,8 @@ export class Game {
     this.placements++;
     this.levelPlacements++;
     this.stats.placements++;
+    this.prevPlaced = this.lastPlaced;
+    this.lastPlaced = { idx: i, piece: card };
     this.emit('place', { idx: i, card });
     const cleared = this.evaluate(i);
     const clearedSides = this.resolveClears(cleared, i);
@@ -260,12 +264,21 @@ export class Game {
     if (n >= 2) this.stats.multiClears[n] = (this.stats.multiClears[n] || 0) + 1;
 
     const removed = [];
-    if (s.clearedCardsRemoved) {
-      const set = new Set();
-      for (const c of cleared) for (const i of c.cells) set.add(i);
-      for (const i of set) {
-        const card = this.cells[i];
-        if (card && card.kind !== 'curse') { this.discard.push(card); this.cells[i] = null; removed.push({ idx: i, card }); }
+    const set = new Set();
+    for (const c of cleared) for (const i of c.cells) set.add(i);
+    for (const i of set) {
+      const card = this.cells[i];
+      if (!card) continue;
+      if (card.kind === 'curse') {
+        // A goal that names a curse (Exorcist) lifts it, whatever the removal setting.
+        if (s.cursesReturn) this.discard.push(card);
+        this.stats.cursesRemoved++;
+        this.cells[i] = null;
+        removed.push({ idx: i, card });
+      } else if (s.clearedCardsRemoved) {
+        this.discard.push(card);
+        this.cells[i] = null;
+        removed.push({ idx: i, card });
       }
     }
 
@@ -661,6 +674,41 @@ export class Game {
     if (this.status !== 'levelup') return;
     this.status = 'playing';
     this.draw();
+  }
+
+  // ---------- undo support ----------
+  snapshot() {
+    const goals = {};
+    for (const side of SIDES) {
+      const g = this.goals[side];
+      goals[side] = g ? { defId: g.def.id, side: g.side, duration: g.duration, timeLeft: g.timeLeft, id: g.id } : null;
+    }
+    return {
+      cells: this.cells.slice(), inset: { ...this.inset }, deck: this.deck.slice(), discard: this.discard.slice(),
+      current: this.current, goals, score: this.score, scoreFrac: this.scoreFrac, combo: this.combo, wards: this.wards,
+      level: this.level, elapsed: this.elapsed, levelElapsed: this.levelElapsed, placements: this.placements,
+      levelPlacements: this.levelPlacements, goalBase: this.goalBase, curseCount: this.curseCount, levelLen: this.levelLen,
+      levelLeft: this.levelLeft, globalLeft: this.globalLeft, rotateIdx: this.rotateIdx, placementLeft: this.placementLeft,
+      status: this.status, overReason: this.overReason, nextId: this.nextId, lastPlaced: this.lastPlaced, prevPlaced: this.prevPlaced,
+      stats: JSON.parse(JSON.stringify(this.stats)), rng: this.rng.state(),
+    };
+  }
+
+  restore(snap) {
+    this.cells = snap.cells.slice(); this.inset = { ...snap.inset }; this.deck = snap.deck.slice(); this.discard = snap.discard.slice();
+    this.current = snap.current;
+    for (const side of SIDES) {
+      const g = snap.goals[side];
+      this.goals[side] = g ? { def: GOAL_BY_ID[g.defId], side: g.side, duration: g.duration, timeLeft: g.timeLeft, id: g.id } : null;
+    }
+    this.score = snap.score; this.scoreFrac = snap.scoreFrac; this.combo = snap.combo; this.wards = snap.wards;
+    this.level = snap.level; this.elapsed = snap.elapsed; this.levelElapsed = snap.levelElapsed; this.placements = snap.placements;
+    this.levelPlacements = snap.levelPlacements; this.goalBase = snap.goalBase; this.curseCount = snap.curseCount; this.levelLen = snap.levelLen;
+    this.levelLeft = snap.levelLeft; this.globalLeft = snap.globalLeft; this.rotateIdx = snap.rotateIdx; this.placementLeft = snap.placementLeft;
+    this.status = snap.status; this.overReason = snap.overReason; this.nextId = snap.nextId; this.lastPlaced = snap.lastPlaced; this.prevPlaced = snap.prevPlaced;
+    this.stats = JSON.parse(JSON.stringify(snap.stats));
+    this.rng.setState(snap.rng);
+    this.events = [];
   }
 
   gameOver(reason) {

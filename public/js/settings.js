@@ -114,6 +114,14 @@ export const SETTINGS_SCHEMA = [
     ],
   },
   {
+    group: 'Undo',
+    items: [
+      { key: 'undoLimit', label: 'Undos per game (0 = off)', type: 'range', min: 0, max: 25, step: 1, def: 5,
+        help: 'Undo rewinds the last placement or ward use, including the clock and the luck of the draw.' },
+      { key: 'undoWardCost', label: 'Ward cost per undo', type: 'range', min: 0, max: 3, step: 1, def: 0 },
+    ],
+  },
+  {
     group: 'Multi-clear perks (2+ goals in one placement)',
     items: [
       { key: 'multiMult', label: 'Score multiplier per extra goal', type: 'range', min: 1, max: 4, step: 0.5, def: 2,
@@ -166,7 +174,8 @@ export const SCHEMA_ITEMS = SETTINGS_SCHEMA.flatMap((g) => g.items);
 export const SCHEMA_BY_KEY = Object.fromEntries(SCHEMA_ITEMS.map((it) => [it.key, it]));
 
 const DEFAULT_DISABLED_GOALS = new Set(['pair', 'fullHouse', 'fourKind', 'straightFlush', 'royalFlush', 'suitedCol', 'ladderCol',
-  'tTwins', 'tConstellation', 'tSymbolSquare', 'tCross', 'nPair', 'nFourKind', 'nFullSuit']);
+  'tTwins', 'tConstellation', 'tSymbolSquare', 'tCross', 'nPair', 'nFourKind', 'nFullSuit',
+  'nNextDoor', 'nHermit', 'nCleanSweep', 'nNumberStack']);
 
 export function defaultSettings() {
   const s = {};

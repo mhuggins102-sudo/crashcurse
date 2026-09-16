@@ -12,13 +12,13 @@ crushing whatever is in its way, until nothing can be placed.
 **Three decks**, each with its own goal pool (Settings → Deck):
 
 - **Numbered tiles** (default): 5 colors × the numbers 1–9, two of each, 90
-  tiles. Colors, top number and copies per tile are sliders. 69 goals in ten
-  categories: sums (Sum 10/15/21/30, Featherweight, Heavyweight), products
-  (12, 24, 36, 48, 72, 100, Round Product), runs (any order, Staircase, Skip
-  Run, Doubling, Color Run, Rainbow Run), colors, poker hands, odds & evens,
-  number tricks (Primes, Perfect Squares, Triples, Nine Lives…), full rows &
-  columns (Sorted, Round, Light, Heavy, Twenty Column…), blocks & shapes
-  (Twenty Block, Balanced Block, Summit, Valley…) and board-wide counts.
+  tiles. Colors, top number and copies per tile are sliders. 140 goals in
+  twelve categories: sums, products, runs, colors, poker hands, odds & evens,
+  number tricks, full rows & columns, blocks & shapes, geometry (diagonals,
+  elbows, wiggles), board-wide (Flood, Clean Sweep, Picture Frame,
+  Crossroads…) and placement goals about the tile you just put down (Head
+  Count, Echo, Exorcist…). Every goal card carries two flags saying whether
+  colors and whether numbers matter to it.
 - **Symbol tiles**: 5 colors × (5 blank, 2 dot, 2 triangle, 1 star), 50 tiles,
   56 goals.
 - **Playing cards**: the standard 52, 29 goals.
@@ -79,6 +79,7 @@ On a phone the whole game fits on one screen: the board in the middle, the drawn
 - Click an empty cell to place the drawn card (hover previews it).
 - Click a glowing curse to remove it with a ward.
 - Arrow keys move a cursor; Enter/Space acts on it.
+- `U` (or `Ctrl`+`Z`) undoes the last placement or ward use, clock and draw included; the number of undos per game and an optional ward cost are settings.
 - `P` pause, `N` new game, `H` hints (highlights cells that would clear a goal), `B` bot autoplay, `Esc` close/pause.
 
 ## How the rules fit together

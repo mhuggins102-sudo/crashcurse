@@ -367,3 +367,25 @@ test('wards can extend the current goal by the configured bonus', () => {
   assert.equal(g2.wardExtend('top'), false, 'cost 0 disables the use');
   assert.equal(g2.wards, 3);
 });
+
+test('undo restores the board, timers, stats and the random state', () => {
+  const s = settings({ clock: 'turns', curseCount: 8, wallMode: 'goal', goalTurns: 4 });
+  const g = new Game(s, 'undo-seed');
+  const rng = makeRng(3);
+  botStep(g, rng); botStep(g, rng);
+  const snap = g.snapshot();
+  const before = { cells: g.cells.map((c) => (c ? c.id : null)), deck: g.deck.map((c) => c.id), current: g.current.id, score: g.score, wards: g.wards, goals: Object.values(g.goals).map((x) => x && x.id), rng: g.rng.state(), placements: g.placements };
+  // play on, then rewind
+  for (let i = 0; i < 6; i++) botStep(g, rng);
+  g.restore(snap);
+  const after = { cells: g.cells.map((c) => (c ? c.id : null)), deck: g.deck.map((c) => c.id), current: g.current.id, score: g.score, wards: g.wards, goals: Object.values(g.goals).map((x) => x && x.id), rng: g.rng.state(), placements: g.placements };
+  assert.deepEqual(after, before);
+  // replaying the same move from the restored state reproduces the same outcome
+  const cell = g.emptyCells()[0];
+  const g2 = new Game(s, 'undo-seed');
+  const rng2 = makeRng(3);
+  botStep(g2, rng2); botStep(g2, rng2);
+  g.place(cell); g2.place(cell);
+  assert.deepEqual(g.deck.map((c) => c.id), g2.deck.map((c) => c.id), 'the draw after undo is the same draw');
+  assert.equal(g.current.id, g2.current.id);
+});

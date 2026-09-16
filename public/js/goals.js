@@ -5,7 +5,7 @@ import { NUM_GOALS, NUM_DETAILS } from './numgoals.js';
 import {
   isPiece, rowIdxs, colIdxs, openRows, openCols, openRowCount, openColCount,
   pathsThrough, allPaths, groupsThrough, allGroups, segmentsThrough, allSegments,
-  squaresThrough, allSquares, plusThrough, allPluses, fullLine,
+  squaresThrough, allSquares, plusThrough, allPluses, fullLine, diagsThrough, allDiags,
 } from './shapes.js';
 
 export * from './shapes.js';
@@ -18,8 +18,18 @@ export const GOAL_DETAILS = { ...CARD_DETAILS, ...TILE_DETAILS, ...NUM_DETAILS }
 export const FAMILY_LABEL = {
   match: 'Matching', run: 'Runs', suit: 'Suits', sum: 'Sums', color: 'Colors', tier: 'Rank tiers', variety: 'Variety', fill: 'Filling',
   mono: 'One color', rainbow: 'Many colors', symbol: 'Symbols', blank: 'Blanks', marked: 'Marked', pattern: 'Patterns', block: 'Blocks', board: 'Board-wide',
-  product: 'Products', parity: 'Odds & evens', property: 'Number tricks',
+  product: 'Products', parity: 'Odds & evens', property: 'Number tricks', geometry: 'Geometry', placement: 'Placement',
 };
+
+// Which tile attributes a goal cares about, for the two flags on every goal card.
+const COLOR_FAMILIES = new Set(['mono', 'rainbow', 'color', 'suit', 'pattern']);
+const VALUE_FAMILIES = new Set(['symbol', 'blank', 'marked', 'match', 'run', 'sum', 'product', 'parity', 'property', 'tier', 'variety']);
+export function goalUses(def) {
+  if (def.uses) return def.uses;
+  const fams = goalFamilies(def);
+  return { color: fams.some((f) => COLOR_FAMILIES.has(f)), num: fams.some((f) => VALUE_FAMILIES.has(f)) };
+}
+export function valueWord(s) { return s.deckType === 'num' ? 'numbers' : s.deckType === 'tiles' ? 'symbols' : 'ranks'; }
 
 export function goalDeck(def) { return def.deck || 'cards'; }
 export function goalFamilies(def) { return def.family || []; }
@@ -32,6 +42,7 @@ export function goalCount(def, s) {
 export function goalSizeRange(def, s) {
   if (def.shape === 'square') return [4, 4];
   if (def.shape === 'plus') return [5, 5];
+  if (def.shape === 'spot') return [1, 1];
   if (def.shape === 'board') { const c = goalCount(def, s); return [c, c]; }
   const sz = typeof def.size === 'function' ? def.size(s) : def.size;
   if (Array.isArray(sz)) return sz;
@@ -82,6 +93,8 @@ export function goalFeasible(def, s, b) {
     case 'rowcol': return cols >= goalMinLen(def, s) || rows >= goalMinLen(def, s);
     case 'square': return rows >= 2 && cols >= 2;
     case 'plus': return rows >= 3 && cols >= 3;
+    case 'diag': return minN <= Math.min(rows, cols);
+    case 'spot': return true;
     case 'board': return goalCount(def, s) <= area;
     default: return true;
   }
@@ -101,6 +114,8 @@ export function goalNotes(def, s) {
     const m = goalMinLen(def, s);
     notes.push(`Only the cells between the current walls count, and the line needs at least ${m} open cell${m === 1 ? '' : 's'}.`);
   }
+  if (def.shape === 'diag') notes.push(`A diagonal runs corner to corner through ${w}s that touch only at their corners.`);
+  if (def.shape === 'spot') notes.push(`This one is about the ${w} you just placed and what surrounds it.`);
   if (def.shape === 'square') notes.push(`A block is a 2×2 square of four ${w}s.`);
   if (def.shape === 'plus') notes.push(`A plus is a centre ${w} and its four side neighbours (up, down, left, right).`);
   if (def.shape === 'board') notes.push(`Counts every ${w} between the walls; all the matching ${w}s clear at once.`);
@@ -114,7 +129,7 @@ export function findSatisfying(b, s, def, placedIdx) {
   const must = !!s.mustIncludePlaced && placedIdx != null;
   if (must && !isPiece(b, placedIdx)) return null;
   if (typeof def.find === 'function') return def.find(b, s, must ? placedIdx : null, must) || null;
-  const test = (idxs) => def.test(idxs.map((i) => b.cells[i]), s);
+  const test = (idxs) => (!def.geometry || def.geometry(idxs, b)) && def.test(idxs.map((i) => b.cells[i]), s);
   let found = null;
   const cb = (idxs) => { if (test(idxs)) { found = idxs.slice(); return true; } return false; };
 
@@ -141,6 +156,14 @@ export function findSatisfying(b, s, def, placedIdx) {
     case 'square': {
       if (must) squaresThrough(b, placedIdx, cb); else allSquares(b, cb);
       return found;
+    }
+    case 'diag': {
+      const [minN, maxN] = goalSizeRange(def, s);
+      for (let n = minN; n <= maxN; n++) {
+        if (must) diagsThrough(b, placedIdx, n, cb); else allDiags(b, n, cb);
+        if (found) return found;
+      }
+      return null;
     }
     case 'plus': {
       if (must) plusThrough(b, placedIdx, cb); else allPluses(b, cb);

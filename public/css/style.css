@@ -295,6 +295,15 @@ table.goals td.fam .fam-tag { margin: 0 4px 0 0; }
 .icon-legend li { display: flex; align-items: center; gap: 4px; padding: 3px 0; line-height: 1.4; }
 .icon-legend .goal-badge { color: var(--text); flex: 0 0 auto; }
 
+/* ---------- relevance flags ---------- */
+.goal-flags { display: inline-flex; gap: 2px; margin-right: 5px; vertical-align: middle; }
+.flag { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 5px; background: rgba(0,0,0,.38); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); color: var(--text); }
+.flag svg { width: 12px; height: 12px; }
+.flag.off { opacity: .55; }
+.wall-left .goal-flags, .wall-right .goal-flags { margin-right: 0; }
+.arena.narrow .flag { width: 15px; height: 15px; }
+.arena.narrow .flag svg { width: 11px; height: 11px; }
+
 /* ---------- goal popup ---------- */
 .goal-pop {
   position: absolute; z-index: 6; width: min(320px, calc(100% - 24px));

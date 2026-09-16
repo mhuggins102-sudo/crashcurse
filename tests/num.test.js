@@ -5,6 +5,7 @@ import { Game } from '../public/js/engine.js';
 import { botStep } from '../public/js/bot.js';
 import { makeRng } from '../public/js/rng.js';
 import { numBoard, numSettings, idx } from './helpers.js';
+import * as awaitGoals from '../public/js/goals.js';
 
 const find = (b, s, id, placed) => findSatisfying(b, s, GOAL_BY_ID[id], placed);
 
@@ -170,4 +171,112 @@ test('every numbered goal has a family and a detail; walls stay family-distinct;
   while (g.status !== 'over' && k < 1500) { if (!botStep(g, rng)) break; g.tick(1.5); k++; }
   assert.equal(g.status, 'over');
   assert.ok(g.placements > 10);
+});
+
+test('new geometry goals: diagonal trio, elbow, wiggle', () => {
+  const s = numSettings();
+  const diag = numBoard(['R1 .. ..', '.. R5 ..', '.. .. R9']);
+  assert.ok(find(diag, s, 'nDiagonalTrio', idx(diag, 1, 1)));
+  assert.ok(find(diag, s, 'nDiagonalTrio', idx(diag, 2, 2)), 'any tile of the diagonal may be the placed one');
+  const anti = numBoard(['.. .. B3', '.. B4 ..', 'B5 .. ..']);
+  assert.ok(find(anti, s, 'nDiagonalRun', idx(anti, 0, 2)));
+  const straight = numBoard(['G2 G7 G4']);
+  assert.equal(find(straight, s, 'nElbow', 1), null, 'a straight trio is not an elbow');
+  const bent = numBoard(['G2 G7', '.. G4']);
+  assert.ok(find(bent, s, 'nElbow', idx(bent, 1, 1)));
+  const wiggle = numBoard(['R1 B2 G3', '.. .. Y4']);
+  assert.equal(find(wiggle, s, 'nWiggle', 0), null, 'right, right, down repeats a direction, so it is not a wiggle');
+  const zig = numBoard(['R1 B2', 'Y4 G3']);
+  assert.ok(find(zig, s, 'nWiggle', 0), 'right, down, left turns at every step');
+});
+
+test('placement goals: head count, echo, encore, exorcist, hermit, cornerstone', () => {
+  const s = numSettings({ wallMode: 'off', curseCount: 0, gridW: 4, gridH: 4, minCells: 1 });
+  const g = new Game(s, 'spot');
+  const only = (id) => { g.goals.top = { def: GOAL_BY_ID[id], side: 'top', duration: 15, timeLeft: 15, id: 1 }; g.goals.right = null; g.goals.bottom = null; g.goals.left = null; };
+  const tile = (color, n) => ({ kind: 'num', color, n, id: Math.floor(Math.random() * 1e9) });
+  // Head Count: a 2 touching exactly two tiles
+  only('nHeadCount');
+  g.cells.fill(null);
+  g.cells[1] = tile(0, 5); g.cells[4] = tile(1, 8);
+  g.current = tile(2, 2);
+  g.place(0);
+  assert.equal(g.cells[0], null, 'placed tile cleared');
+  assert.equal(g.cells[1], null, 'neighbour cleared');
+  assert.equal(g.cells[4], null, 'neighbour cleared');
+  // Echo: same number as the previous placement
+  only('nEcho');
+  g.cells.fill(null);
+  g.current = tile(0, 7);
+  g.place(5);
+  only('nEcho');
+  g.current = tile(3, 7);
+  g.place(10);
+  assert.equal(g.cells[5], null, 'previous tile cleared');
+  assert.equal(g.cells[10], null, 'echo tile cleared');
+  // Exorcist: touching a curse lifts it
+  only('nExorcist');
+  g.cells.fill(null);
+  g.cells[6] = { kind: 'curse', id: 777 };
+  g.current = tile(1, 3);
+  g.place(5);
+  assert.equal(g.cells[6], null, 'the curse is gone');
+  assert.equal(g.cells[5], null, 'the placed tile is gone');
+  // Hermit: no neighbours
+  only('nHermit');
+  g.cells.fill(null);
+  g.current = tile(4, 9);
+  g.place(0);
+  assert.equal(g.cells[0], null);
+  // Cornerstone: corner + same color neighbour
+  only('nCornerstone');
+  g.cells.fill(null);
+  g.cells[1] = tile(2, 4);
+  g.current = tile(2, 8);
+  g.place(0);
+  assert.equal(g.cells[1], null, 'the colour mate cleared with the corner tile');
+});
+
+test('board goals: clean sweep, picture frame, crossroads, double decker, full spectrum', () => {
+  const s = numSettings({ numColors: 3, lineMinLen: 2 });
+  const full = numBoard(['R1 B2 G3', 'B4 R5 G6', 'G7 B8 R9']);
+  assert.equal(find(full, s, 'nCleanSweep', 4).length, 9);
+  const frame = numBoard(['R1 B2 G3', 'B4 .. G6', 'G7 B8 R9']);
+  assert.equal(find(frame, s, 'nPictureFrame', 0).length, 8);
+  assert.equal(find(frame, s, 'nCleanSweep', 0), null);
+  const cross = numBoard(['.. B2 ..', 'B4 R5 G6', '.. B8 ..']);
+  assert.equal(find(cross, s, 'nCrossroads', 4).length, 5);
+  assert.equal(find(cross, s, 'nCrossroads', 1), null, 'the placed tile must be at the crossing');
+  const decker = numBoard(['R1 B2 G3', 'B4 R5 G6', '.. .. ..']);
+  assert.equal(find(decker, s, 'nDoubleDecker', 0).length, 6);
+  const spectrum = numBoard(['R7 .. B7', '.. G7 ..', '.. .. ..']);
+  assert.equal(find(spectrum, s, 'nFullSpectrum', 4).length, 3);
+  assert.equal(find(spectrum, s, 'nFullSpectrum', 0) && find(numBoard(['R7 .. B7']), s, 'nFullSpectrum', 0), null);
+});
+
+test('arithmetic novelties: split, times table, midpoint, fibonacci, odd one out, twin primes', () => {
+  const s = numSettings();
+  assert.ok(find(numBoard(['R2 B5 G3']), s, 'nSplit', 0));
+  assert.equal(find(numBoard(['R2 B5 G4']), s, 'nSplit', 0), null);
+  assert.ok(find(numBoard(['R2 B8 G4']), s, 'nTimesTable', 0));
+  assert.ok(find(numBoard(['R3 B5 G7']), s, 'nMidpoint', 1));
+  assert.equal(find(numBoard(['R3 B4 G7']), s, 'nMidpoint', 1), null);
+  assert.ok(find(numBoard(['R3 B8 G5']), s, 'nFibonacci', 0));
+  assert.ok(find(numBoard(['R1 B4 G6 Y8']), s, 'nOddOneOut', 0));
+  assert.equal(find(numBoard(['R1 B3 G6 Y8']), s, 'nOddOneOut', 0), null);
+  assert.ok(find(numBoard(['R5 B7']), s, 'nTwinPrimes', 0));
+  assert.equal(find(numBoard(['R3 B7']), s, 'nTwinPrimes', 0), null);
+  assert.ok(find(numBoard(['R3 B6', 'G4 Y5']), s, 'nDiagonalBlock', 0) === null);
+  assert.ok(find(numBoard(['R3 B6', 'B4 R5']), s, 'nDiagonalBlock', 0));
+  assert.ok(find(numBoard(['R3 B6', 'G4 Y5']), s, 'nCheckerBlock', 0), 'odd/even/even/odd checkerboard');
+});
+
+test('every numbered goal declares what it looks at, and flags match a few known cases', () => {
+  const { goalUses } = awaitGoals;
+  for (const d of GOAL_DEFS.filter((x) => goalDeck(x) === 'num')) assert.ok(d.uses && typeof d.uses.color === 'boolean' && typeof d.uses.num === 'boolean', d.id);
+  assert.deepEqual(goalUses(GOAL_BY_ID.nFlush4), { color: true, num: false });
+  assert.deepEqual(goalUses(GOAL_BY_ID.nSum10), { color: false, num: true });
+  assert.deepEqual(goalUses(GOAL_BY_ID.nColorRun), { color: true, num: true });
+  assert.deepEqual(goalUses(GOAL_BY_ID.nWiggle), { color: false, num: false });
+  assert.deepEqual(goalUses(GOAL_BY_ID.tQuad), { color: true, num: false }, 'symbol-tile goals derive their flags from families');
 });

@@ -2,7 +2,7 @@
 // panel from the schema, and runs the bot / simulation helpers.
 
 import { Game, OVER_REASONS } from './engine.js';
-import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled, goalSizeRange, goalFamilies, goalDeck, pieceWord, FAMILY_LABEL } from './goals.js';
+import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnabled, goalSizeRange, goalFamilies, goalDeck, goalUses, valueWord, pieceWord, FAMILY_LABEL } from './goals.js';
 import { SUITS, RANK_LABELS, TILE_COLORS, TILE_COLOR_NAMES, SYMBOL_GLYPHS, SYMBOL_NAMES, pieceLabel } from './cards.js';
 import {
   SETTINGS_SCHEMA, SCHEMA_ITEMS, defaultSettings, loadSettings, saveSettings, normalizeSettings,
@@ -74,6 +74,8 @@ const SHAPE_SVG = {
   square: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 2v12M2 8h12" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5h5v4h4v5h-4v4h-5v-4h-4v-5h4z" fill="currentColor"/></svg>',
   board: '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.6"/><circle cx="8" cy="3" r="1.6"/><circle cx="13" cy="3" r="1.6"/><circle cx="3" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13" cy="8" r="1.6"/><circle cx="3" cy="13" r="1.6"/><circle cx="8" cy="13" r="1.6"/><circle cx="13" cy="13" r="1.6"/></g></svg>',
+  diag: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 13v-4M3 13h4M13 3v4M13 3H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  spot: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>',
 };
 const ICONS = {
   menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
@@ -93,7 +95,25 @@ const ICONS = {
   level: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   combo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 9-13h-6z" fill="currentColor"/></svg>',
   curse: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.4 4.3 3 5.3V19a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-3.7c1.6-1 3-2.7 3-5.3a7 7 0 0 0-7-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="11" r="1.5" fill="currentColor"/><circle cx="14.5" cy="11" r="1.5" fill="currentColor"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 12a8 8 0 1 1 2.3 5.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
 };
+
+// Relevance flags: does the goal care about colors? about numbers (symbols / ranks)?
+const FLAG_SVG = {
+  colorOn: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.3" cy="6" r="3.1" fill="#e5484d"/><circle cx="10.7" cy="6" r="3.1" fill="#3b82f6"/><circle cx="8" cy="10.6" r="3.1" fill="#f2b32b"/></svg>',
+  colorOff: '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="#7c8496"><circle cx="5.3" cy="6" r="3.1"/><circle cx="10.7" cy="6" r="3.1"/><circle cx="8" cy="10.6" r="3.1"/></g><path d="M2.5 13.5 13.5 2.5" stroke="#e9ecf2" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  numOn: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 2.5 4.8 13.5M11.2 2.5 9.8 13.5M2.5 6.2h11M2 10.2h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  numOff: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 2.5 4.8 13.5M11.2 2.5 9.8 13.5M2.5 6.2h11M2 10.2h11" fill="none" stroke="#7c8496" stroke-width="1.7" stroke-linecap="round"/><path d="M2.5 13.5 13.5 2.5" stroke="#e9ecf2" stroke-width="1.8" stroke-linecap="round"/></svg>',
+};
+function cap(w) { return w.charAt(0).toUpperCase() + w.slice(1); }
+function goalFlagsHTML(def, s) {
+  const u = goalUses(def);
+  const vw = valueWord(s);
+  return `<span class="goal-flags">` +
+    `<span class="flag ${u.color ? 'on' : 'off'}" title="${u.color ? 'Colors matter' : 'Any colors'}">${u.color ? FLAG_SVG.colorOn : FLAG_SVG.colorOff}</span>` +
+    `<span class="flag ${u.num ? 'on' : 'off'}" title="${u.num ? cap(vw) + ' matter' : 'Any ' + vw}">${u.num ? FLAG_SVG.numOn : FLAG_SVG.numOff}</span>` +
+    `</span>`;
+}
 
 const ICON_REPLACE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-9.6 3.7M2.5 8a5.5 5.5 0 0 1 9.6-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.6 1.6v3.2H9.4M3.4 14.4v-3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_EXTEND = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 5.5v3l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -107,6 +127,8 @@ const SHAPE_TITLE = {
   square: 'A 2×2 block',
   plus: 'A plus shape: a centre and its four side neighbours',
   board: 'Anywhere on the board (a count between the walls)',
+  diag: 'A diagonal line, corner to corner',
+  spot: 'About the tile you just placed',
 };
 function shapeKey(def, s) {
   if (def.icon) return def.icon;
@@ -115,6 +137,7 @@ function shapeKey(def, s) {
   return def.shape;
 }
 function goalCountText(def, s, game) {
+  if (def.countText) return def.countText;
   if (def.shape === 'row') return game ? String(game.cols()) : 'all';
   if (def.shape === 'col') return game ? String(game.rows()) : 'all';
   if (def.shape === 'rowcol') return 'all';
@@ -206,7 +229,7 @@ export class UI {
       current: $('current'), upcoming: $('upcoming'), hintText: $('hint-text'), placementTimer: $('placement-timer'),
       stats: $('stats'), log: $('log'), toasts: $('toasts'),
       topScore: $('top-score'), topBest: $('top-best'),
-      btnNew: $('btn-new'), btnPause: $('btn-pause'), btnBot: $('btn-bot'), btnHints: $('btn-hints'), btnHelp: $('btn-help'), btnSettings: $('btn-settings'),
+      btnNew: $('btn-new'), btnPause: $('btn-pause'), btnUndo: $('btn-undo'), btnBot: $('btn-bot'), btnHints: $('btn-hints'), btnHelp: $('btn-help'), btnSettings: $('btn-settings'),
       overlay: $('modal-overlay'), overlayBox: $('overlay-box'),
       settings: $('modal-settings'), settingsBody: $('settings-body'),
       help: $('modal-help'), helpBody: $('help-body'),
@@ -237,6 +260,7 @@ export class UI {
     $('stats-close').onclick = () => this.closeStats();
     this.el.statsModal.addEventListener('click', (e) => { if (e.target === this.el.statsModal) this.closeStats(); });
     this.el.btnNew.onclick = () => this.newGame();
+    this.el.btnUndo.onclick = () => this.undo();
     this.el.btnPause.onclick = () => this.togglePause();
     this.el.btnBot.onclick = () => this.toggleBot();
     this.el.btnHints.onclick = () => this.toggleHints();
@@ -252,6 +276,7 @@ export class UI {
       if (!a) return;
       const act = a.dataset.action;
       if (act === 'resume') this.togglePause();
+      else if (act === 'undo') this.undo();
       else if (act === 'continue') this.continueLevel();
       else if (act === 'new') this.newGame();
       else if (act === 'settings') { this.hideOverlay(); this.openSettings(); }
@@ -286,6 +311,8 @@ export class UI {
     this.paused = false;
     this.cursor = null;
     this.botAcc = 0;
+    this.history = [];
+    this.undosUsed = 0;
     this.el.log.innerHTML = '';
     this.el.fx.innerHTML = '';
     this.el.pops.innerHTML = '';
@@ -367,6 +394,7 @@ export class UI {
     this.el.menuSheet.innerHTML =
       item('pause', this.paused ? 'play' : 'pause', this.paused ? 'Resume' : 'Pause', playing ? '' : 'not playing') +
       item('new', 'new', 'New game') +
+      item('undo', 'undo', 'Undo last move', s.undoLimit ? `${this.undosLeft()} left` : 'off') +
       `<div class="sheet-sep"></div>` +
       item('hints', 'hints', 'Hints', s.hints ? 'on' : 'off', s.hints) +
       item('bot', 'bot', 'Bot autoplay', this.bot ? 'on' : 'off', this.bot) +
@@ -381,6 +409,7 @@ export class UI {
 
   menuAction(key) {
     if (key === 'pause') this.togglePause();
+    else if (key === 'undo') this.undo();
     else if (key === 'new') this.newGame();
     else if (key === 'hints') this.toggleHints();
     else if (key === 'bot') this.toggleBot();
@@ -524,7 +553,7 @@ export class UI {
         box.dataset.gid = String(goal.id);
         box.className = 'goal';
         box.innerHTML = `<div class="goal-side">${SIDE_ARROW[side]} ${SIDE_LABEL[side]}</div>` +
-          `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
+          `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}${goalFlagsHTML(goal.def, s)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
           `<div class="goal-desc">${esc(goalDesc(goal.def, s))}</div>` +
           `<div class="goal-meta"><span class="pts">${goalPoints(goal.def, s)} pts</span><span class="timer-text"></span></div>` +
           `<div class="goal-bar"><div class="goal-bar-fill"></div></div>` +
@@ -605,7 +634,7 @@ export class UI {
     }
 
     pop.innerHTML =
-      `<div class="goal-pop-head"><span class="goal-pop-name" style="color: var(--${side})">${SIDE_ARROW[side]} ${goalBadgeHTML(goal.def, s, g)}${esc(goal.def.name)}</span>` +
+      `<div class="goal-pop-head"><span class="goal-pop-name" style="color: var(--${side})">${SIDE_ARROW[side]} ${goalBadgeHTML(goal.def, s, g)}${goalFlagsHTML(goal.def, s)}${esc(goal.def.name)}</span>` +
       `<span class="goal-pop-meta">${goalPoints(goal.def, s)} pts · ${left}</span></div>` +
       `<div class="goal-pop-body">${esc(goalDetail(goal.def, s))}</div>` +
       `<ul class="goal-pop-notes">${goalNotes(goal.def, s).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` +
@@ -625,11 +654,12 @@ export class UI {
   wardAction(kind, side) {
     const g = this.game;
     let ok = false;
+    this.pushHistory();
     if (kind === 'reroll') ok = g.wardReroll(side);
     else if (kind === 'extend') ok = g.wardExtend(side);
     else if (kind === 'retreat') ok = g.wardRetreat(side);
     this.hideGoalPopup();
-    if (!ok) { this.toast('That ward action is not available right now', 'bad'); return; }
+    if (!ok) { this.popHistory(); this.toast('That ward action is not available right now', 'bad'); return; }
     this.afterAction();
   }
 
@@ -720,6 +750,7 @@ export class UI {
     this.el.btnPause.innerHTML = ICONS[this.paused ? 'play' : 'pause'];
     this.el.btnPause.title = this.paused ? 'Resume (P)' : 'Pause (P)';
     this.renderChips();
+    this.renderUndo();
   }
 
   // ---------- events → feedback ----------
@@ -862,14 +893,58 @@ export class UI {
     const g = this.game;
     if (!g || this.paused || this.modalOpen() || g.status !== 'playing') return;
     if (g.canPlace(i)) {
+      this.pushHistory();
       g.place(i);
     } else if (g.cells[i] && g.cells[i].kind === 'curse' && g.inBounds(i)) {
+      this.pushHistory();
       if (!g.spendWard(i)) {
+        this.popHistory();
         if (this.settings.wardSpend === 'manual' && g.wards <= 0) this.toast('No wards: clear a goal to earn one', 'bad');
         return;
       }
     } else return;
     this.afterAction();
+  }
+
+  // ---------- undo ----------
+  pushHistory() {
+    if (!this.settings.undoLimit) return;
+    this.history.push(this.game.snapshot());
+    if (this.history.length > 30) this.history.shift();
+  }
+
+  popHistory() { this.history.pop(); }
+
+  undosLeft() { return Math.max(0, (this.settings.undoLimit || 0) - this.undosUsed); }
+
+  undo() {
+    const g = this.game, s = this.settings;
+    if (!g) return;
+    if (!s.undoLimit) { this.toast('Undo is switched off in Settings', 'bad'); return; }
+    if (!this.history.length) { this.toast('Nothing to undo'); return; }
+    if (this.undosLeft() <= 0) { this.toast('No undos left this game', 'bad'); return; }
+    const snap = this.history[this.history.length - 1];
+    if (s.undoWardCost > 0 && snap.wards < s.undoWardCost) { this.toast(`Undo costs ${s.undoWardCost} ward${s.undoWardCost === 1 ? '' : 's'}`, 'bad'); return; }
+    this.history.pop();
+    g.restore(snap);
+    if (s.undoWardCost > 0) { g.wards -= s.undoWardCost; g.stats.wardsSpent += s.undoWardCost; }
+    this.undosUsed++;
+    g.stats.undos = this.undosUsed;
+    this.paused = false;
+    this.hideOverlay();
+    this.hideGoalPopup();
+    this.renderAll();
+    this.log(`Undo (${this.undosLeft()} left)`);
+    this.toast(`Undid the last move · ${this.undosLeft()} left`, 'good');
+  }
+
+  renderUndo() {
+    const b = this.el.btnUndo;
+    if (!b) return;
+    const left = this.undosLeft();
+    const can = !!(this.settings.undoLimit && this.history && this.history.length && left > 0);
+    b.disabled = !can;
+    b.title = !this.settings.undoLimit ? 'Undo is off in Settings' : !this.history || !this.history.length ? 'Nothing to undo' : left <= 0 ? 'No undos left this game' : `Undo the last move (U) · ${left} left`;
   }
 
   afterAction() {
@@ -891,7 +966,9 @@ export class UI {
       return;
     }
     if (this.modalOpen()) return;
-    if (k === 'p' || k === 'P') this.togglePause();
+    if ((k === 'z' || k === 'Z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.undo(); return; }
+    if (k === 'u' || k === 'U') this.undo();
+    else if (k === 'p' || k === 'P') this.togglePause();
     else if (k === 'n' || k === 'N') this.newGame();
     else if (k === 'h' || k === 'H') this.toggleHints();
     else if (k === 'b' || k === 'B') this.toggleBot();
@@ -978,6 +1055,7 @@ export class UI {
       ['Wards earned / spent', `${st.wardsEarned} / ${st.wardsSpent}`],
       ['Goals replaced / extended', `${st.rerolls} / ${st.extends}`],
       ['Walls pushed back', st.retreatsBought],
+      ['Undos', st.undos || 0],
       ['Seed', g.seed],
     ];
     const goalLines = GOAL_DEFS.filter((d) => st.goalsOffered[d.id]).map((d) => `${d.name} ${st.goalsCleared[d.id] || 0}/${st.goalsOffered[d.id]}`).join(' · ');
@@ -986,7 +1064,7 @@ export class UI {
       `<div class="over-score">${g.score}</div>${bestNote}` +
       `<table class="over-stats">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('')}</table>` +
       `<div class="over-goals">Cleared / offered: ${esc(goalLines) || 'no goals'}</div>` +
-      `<div class="btnrow"><button class="primary" data-action="new">New game</button><button data-action="settings">Settings</button><button data-action="close">Look at the board</button></div>`
+      `<div class="btnrow"><button class="primary" data-action="new">New game</button>${this.settings.undoLimit && this.history.length && this.undosLeft() > 0 ? '<button data-action="undo">Undo last move</button>' : ''}<button data-action="settings">Settings</button><button data-action="close">Look at the board</button></div>`
     );
     this.el.btnPause.innerHTML = ICONS.pause;
   }
@@ -1009,7 +1087,7 @@ export class UI {
       `<li>Click or tap an empty cell to place the card; hover shows a preview.</li>` +
       `<li>Click a glowing curse to remove it with a ward. The two small buttons under each goal replace it (↻) or add time to it (clock); the goal itself opens its full description.</li>` +
       `<li><kbd>←↑↓→</kbd> move a cursor, <kbd>Enter</kbd> or <kbd>Space</kbd> acts on it.</li>` +
-      `<li><kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
+      `<li><kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
       `</ul>` +
       `<h3>Definitions</h3><ul>` +
       `<li><b>Chain</b>: ${this.settings.chainShape === 'group' ? `any group of ${w}s connected up/down/left/right, branching allowed.` : `a snake of ${w}s connected up/down/left/right. It may bend as often as it likes but may not branch (a plus shape is not a chain), and each ${w} is used once.`} Diagonals never connect.</li>` +
@@ -1030,6 +1108,12 @@ export class UI {
       `<li><span class="goal-badge shape-square">${SHAPE_SVG.square}<span class="goal-count">4</span></span> a 2×2 block</li>` +
       `<li><span class="goal-badge shape-plus">${SHAPE_SVG.plus}<span class="goal-count">5</span></span> a plus: a centre and its four side neighbours</li>` +
       `<li><span class="goal-badge shape-board">${SHAPE_SVG.board}<span class="goal-count">6</span></span> that many matching ${w}s anywhere on the board</li>` +
+      `<li><span class="goal-badge shape-diag">${SHAPE_SVG.diag}<span class="goal-count">3</span></span> 3 ${w}s on a diagonal, touching at their corners</li>` +
+      `<li><span class="goal-badge shape-spot">${SHAPE_SVG.spot}<span class="goal-count">1</span></span> about the ${w} you just placed and what surrounds it</li>` +
+      `</ul>` +
+      `<p>The two small flags after the badge say what the goal looks at:</p><ul class="icon-legend">` +
+      `<li><span class="goal-flags"><span class="flag on">${FLAG_SVG.colorOn}</span></span> colors matter &nbsp;·&nbsp; <span class="goal-flags"><span class="flag off">${FLAG_SVG.colorOff}</span></span> any colors</li>` +
+      `<li><span class="goal-flags"><span class="flag on">${FLAG_SVG.numOn}</span></span> ${valueWord(s0)} matter &nbsp;·&nbsp; <span class="goal-flags"><span class="flag off">${FLAG_SVG.numOff}</span></span> any ${valueWord(s0)}</li>` +
       `</ul>` +
       this.wardRulesHTML(this.settings) +
       `<h3>Goal cards (${s0.deckType === 'num' ? 'numbered tiles' : s0.deckType === 'tiles' ? 'symbol tiles' : 'playing cards'})</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}. Switch the deck in Settings to see the other deck's goals.</p>` +
@@ -1062,7 +1146,7 @@ export class UI {
       html += `<h4>${esc(cat)}</h4><dl class="goal-list">`;
       for (const d of defs.filter((x) => x.cat === cat)) {
         const on = goalEnabled(d, s) && !(s.chainShape === 'group' && d.shape === 'chain' && (typeof d.ordered === 'function' ? d.ordered(s) : !!d.ordered));
-        html += `<dt class="${on ? '' : 'off'}">${goalBadgeHTML(d, s, null)}${esc(d.name)} <span class="pts">${goalPoints(d, s)} pts</span>${familyTagsHTML(d)}${on ? '' : ' <span class="offtag">off</span>'}</dt><dd class="${on ? '' : 'off'}">${esc(goalDetail(d, s))}</dd>`;
+        html += `<dt class="${on ? '' : 'off'}">${goalBadgeHTML(d, s, null)}${goalFlagsHTML(d, s)}${esc(d.name)} <span class="pts">${goalPoints(d, s)} pts</span>${familyTagsHTML(d)}${on ? '' : ' <span class="offtag">off</span>'}</dt><dd class="${on ? '' : 'off'}">${esc(goalDetail(d, s))}</dd>`;
       }
       html += '</dl>';
     }
@@ -1099,6 +1183,7 @@ export class UI {
     lines.push(`Clearing 2+ goals with one card multiplies the points by ${s.multiMult} per extra goal${perks.length ? ' and grants ' + perks.join(', ') : ''}.`);
     if (s.comboEnabled) lines.push(`Consecutive clearing placements build a combo worth +${Math.round(s.comboBonus * 100)}% per step.`);
     if (s.placementSeconds > 0 && t) lines.push(`You have ${s.placementSeconds}s to place each card, or it is ${s.placementTimeout === 'random' ? 'placed at random' : 'discarded'}.`);
+    if (s.undoLimit > 0) lines.push(`Undo: ${s.undoLimit} per game${s.undoWardCost > 0 ? `, ${s.undoWardCost} ward${s.undoWardCost === 1 ? '' : 's'} each` : ''}; it rewinds the clock and the draw as well.`);
     if (s.mode === 'survival') lines.push(`Survival: outlast ${t ? s.levelSeconds + ' seconds' : s.levelTurns + ' placements'} to finish a level (+${t ? s.levelSecondsGrowth + 's' : s.levelTurnsGrowth + ' turns'} each level). Each new level adds ${s.levelCurseGrowth} curse${s.levelCurseGrowth === 1 ? '' : 's'} and multiplies goal timers by ${s.levelPressureGrowth}.`);
     else lines.push('Endless: score as much as you can before the walls win.');
     return lines;
@@ -1256,7 +1341,7 @@ export class UI {
   refreshGoalDescs() {
     for (const d of GOAL_DEFS) {
       this.goalInputs[d.id].desc.textContent = goalDesc(d, this.draft);
-      this.goalInputs[d.id].shape.innerHTML = goalBadgeHTML(d, this.draft, null);
+      this.goalInputs[d.id].shape.innerHTML = goalBadgeHTML(d, this.draft, null) + goalFlagsHTML(d, this.draft);
     }
   }
 

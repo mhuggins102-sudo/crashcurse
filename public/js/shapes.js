@@ -253,3 +253,65 @@ export function allPluses(b, cb) {
 export function fullLine(b, idxs, minLen) {
   return idxs.length >= Math.max(1, minLen || 1) && idxs.every((i) => isPiece(b, i));
 }
+
+// Diagonal segments of N pieces containing idx (both diagonal directions).
+function diagAt(b, r, c, dr, dc, N) {
+  const idxs = [];
+  for (let k = 0; k < N; k++) {
+    const rr = r + dr * k, cc = c + dc * k;
+    if (rr < 0 || rr >= b.H || cc < 0 || cc >= b.W) return null;
+    const i = rr * b.W + cc;
+    if (!isPiece(b, i)) return null;
+    idxs.push(i);
+  }
+  return idxs;
+}
+
+export function diagsThrough(b, idx, N, cb) {
+  const r = (idx / b.W) | 0, c = idx % b.W;
+  for (let k = 0; k < N; k++) {
+    const seg = diagAt(b, r - k, c - k, 1, 1, N);
+    if (seg && cb(seg)) return true;
+  }
+  for (let k = 0; k < N; k++) {
+    const seg = diagAt(b, r - k, c + k, 1, -1, N);
+    if (seg && cb(seg)) return true;
+  }
+  return false;
+}
+
+export function allDiags(b, N, cb) {
+  for (let r = 0; r + N <= b.H; r++) for (let c = 0; c < b.W; c++) {
+    if (c + N <= b.W) { const seg = diagAt(b, r, c, 1, 1, N); if (seg && cb(seg)) return true; }
+    if (c - N + 1 >= 0) { const seg = diagAt(b, r, c, 1, -1, N); if (seg && cb(seg)) return true; }
+  }
+  return false;
+}
+
+// Cells on the border of the open area (inside the walls).
+export function perimeterIdxs(b) {
+  const out = [];
+  const r0 = b.inset.top, r1 = b.H - 1 - b.inset.bottom, c0 = b.inset.left, c1 = b.W - 1 - b.inset.right;
+  if (r1 < r0 || c1 < c0) return out;
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    if (r === r0 || r === r1 || c === c0 || c === c1) out.push(r * b.W + c);
+  }
+  return out;
+}
+
+// Geometry of an ordered chain (list of cell indices).
+export function isStraightIdxs(b, idxs) {
+  const rows = new Set(idxs.map((i) => (i / b.W) | 0));
+  const cols = new Set(idxs.map((i) => i % b.W));
+  return rows.size === 1 || cols.size === 1;
+}
+
+export function turnsEveryStep(b, idxs) {
+  let prev = null;
+  for (let k = 1; k < idxs.length; k++) {
+    const d = [((idxs[k] / b.W) | 0) - ((idxs[k - 1] / b.W) | 0), (idxs[k] % b.W) - (idxs[k - 1] % b.W)];
+    if (prev && prev[0] === d[0] && prev[1] === d[1]) return false;
+    prev = d;
+  }
+  return true;
+}
