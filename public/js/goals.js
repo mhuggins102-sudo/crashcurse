@@ -125,50 +125,52 @@ export function goalNotes(def, s) {
 
 // Returns the cell indices that satisfy the goal, or null.
 // placedIdx: the cell that was just placed (or null when not applicable).
-export function findSatisfying(b, s, def, placedIdx) {
+// Walk every set of cells that satisfies the goal, in a fixed order: the
+// smallest size first, then the shape's own scan order (through the placed
+// piece when the rules require it). onFound(idxs) returns true to stop.
+function enumerateSatisfying(b, s, def, placedIdx, onFound) {
   const must = !!s.mustIncludePlaced && placedIdx != null;
-  if (must && !isPiece(b, placedIdx)) return null;
-  if (typeof def.find === 'function') return def.find(b, s, must ? placedIdx : null, must) || null;
+  if (must && !isPiece(b, placedIdx)) return;
+  if (typeof def.find === 'function') {
+    const r = def.find(b, s, must ? placedIdx : null, must);
+    if (r) onFound(r.slice());
+    return;
+  }
   const test = (idxs) => (!def.geometry || def.geometry(idxs, b)) && def.test(idxs.map((i) => b.cells[i]), s);
-  let found = null;
-  const cb = (idxs) => { if (test(idxs)) { found = idxs.slice(); return true; } return false; };
+  let stop = false;
+  const cb = (idxs) => { if (!stop && test(idxs) && onFound(idxs.slice())) stop = true; return stop; };
 
   switch (def.shape) {
     case 'chain': {
       const [minN, maxN] = goalSizeRange(def, s);
-      for (let n = minN; n <= maxN; n++) {
+      for (let n = minN; n <= maxN && !stop; n++) {
         if (s.chainShape === 'group') {
           if (must) groupsThrough(b, placedIdx, n, cb); else allGroups(b, n, cb);
         } else if (must) pathsThrough(b, placedIdx, n, cb);
         else allPaths(b, n, cb);
-        if (found) return found;
       }
-      return null;
+      return;
     }
     case 'line': {
       const [minN, maxN] = goalSizeRange(def, s);
-      for (let n = minN; n <= maxN; n++) {
+      for (let n = minN; n <= maxN && !stop; n++) {
         if (must) segmentsThrough(b, placedIdx, n, cb); else allSegments(b, n, cb);
-        if (found) return found;
       }
-      return null;
+      return;
     }
-    case 'square': {
+    case 'square':
       if (must) squaresThrough(b, placedIdx, cb); else allSquares(b, cb);
-      return found;
-    }
+      return;
     case 'diag': {
       const [minN, maxN] = goalSizeRange(def, s);
-      for (let n = minN; n <= maxN; n++) {
+      for (let n = minN; n <= maxN && !stop; n++) {
         if (must) diagsThrough(b, placedIdx, n, cb); else allDiags(b, n, cb);
-        if (found) return found;
       }
-      return null;
+      return;
     }
-    case 'plus': {
+    case 'plus':
       if (must) plusThrough(b, placedIdx, cb); else allPluses(b, cb);
-      return found;
-    }
+      return;
     case 'row':
     case 'col':
     case 'rowcol': {
@@ -178,15 +180,34 @@ export function findSatisfying(b, s, def, placedIdx) {
       const wantRow = def.shape !== 'col', wantCol = def.shape !== 'row';
       if (must) {
         const r = (placedIdx / b.W) | 0, c = placedIdx % b.W;
-        if (wantRow && tryRow(r)) return found;
-        if (wantCol && tryCol(c)) return found;
-        return null;
+        if (wantRow && tryRow(r)) return;
+        if (wantCol) tryCol(c);
+        return;
       }
-      if (wantRow) for (const r of openRows(b)) if (tryRow(r)) return found;
-      if (wantCol) for (const c of openCols(b)) if (tryCol(c)) return found;
-      return null;
+      if (wantRow) for (const r of openRows(b)) if (tryRow(r)) return;
+      if (wantCol) for (const c of openCols(b)) if (tryCol(c)) return;
+      return;
     }
     default:
-      return null;
+      return;
   }
+}
+
+// The first set of cells that satisfies the goal, or null.
+export function findSatisfying(b, s, def, placedIdx) {
+  let found = null;
+  enumerateSatisfying(b, s, def, placedIdx, (idxs) => { found = idxs; return true; });
+  return found;
+}
+
+// Every distinct set of cells that satisfies the goal (the same cells reached
+// in another order count once), in search order, up to `limit` of them.
+export function findAllSatisfying(b, s, def, placedIdx, limit = 12) {
+  const out = [], seen = new Set();
+  enumerateSatisfying(b, s, def, placedIdx, (idxs) => {
+    const key = idxs.slice().sort((x, y) => x - y).join(',');
+    if (!seen.has(key)) { seen.add(key); out.push(idxs); }
+    return out.length >= limit;
+  });
+  return out;
 }

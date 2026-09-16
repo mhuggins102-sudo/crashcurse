@@ -66,6 +66,7 @@ export function chooseMove(game, rng) {
 }
 
 export function botStep(game, rng) {
+  if (game.status === 'choosing') { game.autoChoose(); return true; }
   if (game.status === 'levelup') { game.continueLevel(); return true; }
   if (game.status !== 'playing') return false;
   if (game.s.wardSpend === 'manual' && game.wards > 0) {

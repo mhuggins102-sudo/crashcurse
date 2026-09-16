@@ -3,7 +3,7 @@
 
 import { makeRng, hashSeed, randomSeedString } from './rng.js';
 import { makeCard, makeTile, makeNum, makeCurse, pieceKey } from './cards.js';
-import { GOAL_DEFS, GOAL_BY_ID, SIDES, findSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies, goalFeasible, goalDeck } from './goals.js';
+import { GOAL_DEFS, GOAL_BY_ID, SIDES, findSatisfying, findAllSatisfying, goalPoints, goalEnabled, goalIsOrdered, goalFamilies, goalFeasible, goalDeck } from './goals.js';
 
 export const OVER_REASONS = {
   nospace: 'No empty cell for the drawn card',
@@ -12,6 +12,9 @@ export const OVER_REASONS = {
   curse: 'A curse had nowhere to go',
   stuck: 'The board is stuck: nothing can be placed',
 };
+
+// How many alternative sets of tiles a goal may offer the player to choose from.
+const CHOICE_LIMIT = 12;
 
 export class Game {
   constructor(settings, seedStr) {
@@ -30,6 +33,7 @@ export class Game {
     this.score = 0;
     this.scoreFrac = 0;
     this.streak = 0;
+    this.pending = null; // a placement waiting for the player to choose which tiles clear a goal
     this.wards = 0;
     this.level = 1;
     this.elapsed = 0;
@@ -223,7 +227,23 @@ export class Game {
     return res;
   }
 
-  place(i) {
+  // Every distinct way each goal could clear with cell i just placed (up to
+  // CHOICE_LIMIT sets per goal), in search order.
+  evaluateAll(i) {
+    const out = [];
+    for (const side of SIDES) {
+      const g = this.goals[side];
+      if (!g) continue;
+      const sets = findAllSatisfying(this, this.s, g.def, i, CHOICE_LIMIT);
+      if (sets.length) out.push({ side, goal: g, sets });
+    }
+    return out;
+  }
+
+  // With ask, and the "choose the tiles" rule on, a placement that could clear
+  // a goal in more than one way stops in the 'choosing' state until choose()
+  // or autoChoose() picks the sets; bots and timeouts never ask.
+  place(i, { ask = false } = {}) {
     if (!this.canPlace(i)) return false;
     const card = this.current;
     this.current = null;
@@ -235,13 +255,73 @@ export class Game {
     this.prevPlaced = this.lastPlaced;
     this.lastPlaced = { idx: i, piece: card };
     this.emit('place', { idx: i, card });
-    const cleared = this.evaluate(i);
-    const clearedSides = this.resolveClears(cleared, i);
-    if (this.status !== 'playing') return true;
-    this.afterTurn(clearedSides);
-    if (this.status !== 'playing') return true;
-    this.draw();
+    let cleared;
+    if (ask && this.s.chooseClears) {
+      const all = this.evaluateAll(i);
+      if (all.some((c) => c.sets.length > 1)) {
+        this.pending = { placedIdx: i, step: -1, clears: all.map((c) => ({ side: c.side, goal: c.goal, sets: c.sets, choice: 0 })) };
+        this.status = 'choosing';
+        this.nextChoiceStep();
+        return true;
+      }
+      cleared = all.map((c) => ({ side: c.side, goal: c.goal, cells: c.sets[0] }));
+    } else cleared = this.evaluate(i);
+    this.finishPlacement(i, cleared);
     return true;
+  }
+
+  finishPlacement(i, cleared) {
+    const clearedSides = this.resolveClears(cleared, i);
+    if (this.status !== 'playing') return;
+    this.afterTurn(clearedSides);
+    if (this.status !== 'playing') return;
+    this.draw();
+  }
+
+  // The goal the player is currently choosing tiles for, or null.
+  choiceStep() { return this.pending && this.pending.step >= 0 ? this.pending.clears[this.pending.step] : null; }
+
+  // Move on to the next goal with more than one candidate set; when none is
+  // left, resolve the placement with the chosen sets.
+  nextChoiceStep() {
+    const p = this.pending;
+    if (!p) return;
+    let k = p.step + 1;
+    while (k < p.clears.length && p.clears[k].sets.length < 2) k++;
+    if (k < p.clears.length) {
+      p.step = k;
+      const c = p.clears[k];
+      const remaining = p.clears.slice(k + 1).filter((x) => x.sets.length > 1).length;
+      this.emit('choose', { placedIdx: p.placedIdx, side: c.side, id: c.goal.def.id, name: c.goal.def.name, options: c.sets.length, remaining });
+      return;
+    }
+    const cleared = p.clears.map((c) => ({ side: c.side, goal: c.goal, cells: c.sets[c.choice] }));
+    this.pending = null;
+    this.status = 'playing';
+    this.finishPlacement(p.placedIdx, cleared);
+  }
+
+  // Point at another candidate set for the current goal without confirming it.
+  selectChoice(k) {
+    const c = this.choiceStep();
+    if (!c || !(k >= 0 && k < c.sets.length)) return false;
+    c.choice = k;
+    return true;
+  }
+
+  // Confirm the selected set (or set k) for the current goal and move on.
+  choose(k = null) {
+    const c = this.choiceStep();
+    if (!c) return false;
+    if (k != null && !this.selectChoice(k)) return false;
+    this.nextChoiceStep();
+    return true;
+  }
+
+  // Take the selected (by default the first) set for every goal still waiting.
+  autoChoose() {
+    let guard = 0;
+    while (this.status === 'choosing' && guard++ < 16) this.nextChoiceStep();
   }
 
   resolveClears(cleared, placedIdx, { viaWall = false } = {}) {
@@ -768,6 +848,7 @@ export class Game {
       levelLeft: this.levelLeft, globalLeft: this.globalLeft, rotateIdx: this.rotateIdx, placementLeft: this.placementLeft,
       status: this.status, overReason: this.overReason, nextId: this.nextId, lastPlaced: this.lastPlaced, prevPlaced: this.prevPlaced,
       goalDeck: this.goalDeck.slice(),
+      pending: this.pending ? { placedIdx: this.pending.placedIdx, step: this.pending.step, clears: this.pending.clears.map((c) => ({ side: c.side, sets: c.sets.map((x) => x.slice()), choice: c.choice })) } : null,
       stats: JSON.parse(JSON.stringify(this.stats)), rng: this.rng.state(),
     };
   }
@@ -786,6 +867,7 @@ export class Game {
     this.status = snap.status; this.overReason = snap.overReason; this.nextId = snap.nextId; this.lastPlaced = snap.lastPlaced; this.prevPlaced = snap.prevPlaced;
     this.stats = JSON.parse(JSON.stringify(snap.stats));
     this.goalDeck = (snap.goalDeck || []).slice();
+    this.pending = snap.pending ? { placedIdx: snap.pending.placedIdx, step: snap.pending.step, clears: snap.pending.clears.map((c) => ({ side: c.side, goal: this.goals[c.side], sets: c.sets.map((x) => x.slice()), choice: c.choice })) } : null;
     this.rng.setState(snap.rng);
     this.events = [];
   }

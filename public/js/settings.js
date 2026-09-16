@@ -51,6 +51,8 @@ export const SETTINGS_SCHEMA = [
     items: [
       { key: 'mustIncludePlaced', label: 'The placed card must be part of the completed goal', type: 'bool', def: true,
         help: 'Off lets a freshly drawn goal be cleared by any placement if the board already satisfies it.' },
+      { key: 'chooseClears', label: 'Choose the tiles when more than one set could clear a goal', type: 'bool', def: true,
+        help: 'After a placement, if a goal could be completed by different sets of tiles, the game waits (timers included) and lets you tap which set to use. Off takes the first set found: the smallest, then the one reaching up or left from the placed tile. Bots and wall clears always take the first set.' },
       { key: 'clearedCardsRemoved', label: 'Cleared cards leave the board', type: 'bool', def: true,
         help: 'On: clearing frees space (match-3 style). Off: cards stay and can be reused.' },
       { key: 'chainShape', label: 'Chain shape', type: 'select', def: 'path',

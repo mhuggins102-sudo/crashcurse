@@ -229,6 +229,7 @@ export class UI {
       wall: Object.fromEntries(SIDES.map((s) => [s, $('wall-' + s)])),
       goal: Object.fromEntries(SIDES.map((s) => [s, $('goal-' + s)])),
       btnRefresh: $('btn-refresh'),
+      chooser: $('chooser'), trayCurrent: document.querySelector('.tray-current'), trayNext: document.querySelector('.tray-next'),
       current: $('current'), upcoming: $('upcoming'), hintText: $('hint-text'), placementTimer: $('placement-timer'),
       stats: $('stats'), log: $('log'), toasts: $('toasts'),
       topScore: $('top-score'), topBest: $('top-best'),
@@ -265,6 +266,12 @@ export class UI {
     this.el.btnNew.onclick = () => this.newGame();
     this.el.btnUndo.onclick = () => this.undo();
     this.el.btnRefresh.onclick = (e) => { e.stopPropagation(); this.refreshNext(); };
+    this.el.chooser.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-choose]');
+      if (!b) return;
+      e.stopPropagation();
+      if (b.dataset.choose === 'ok') this.confirmChoice(); else this.cycleChoice(b.dataset.choose === 'prev' ? -1 : 1);
+    });
     this.el.btnPause.onclick = () => this.togglePause();
     this.el.btnBot.onclick = () => this.toggleBot();
     this.el.btnHints.onclick = () => this.toggleHints();
@@ -525,6 +532,13 @@ export class UI {
     const cur = g.current;
     const ghost = cur ? (cur.kind === 'tile' ? SYMBOL_GLYPHS[cur.sym] : cur.kind === 'num' ? String(cur.n) : RANK_LABELS[cur.rank] + SUITS[cur.suit]) : '';
     const ghostBg = cur && (cur.kind === 'tile' || cur.kind === 'num') ? TILE_COLORS[cur.color] : '';
+    const choice = g.status === 'choosing' ? g.choiceStep() : null;
+    const cand = new Set(), pick = new Set();
+    if (choice) {
+      for (const set of choice.sets) for (const i of set) cand.add(i);
+      for (const i of choice.sets[choice.choice]) pick.add(i);
+    }
+    this.el.arena.classList.toggle('choosing', !!choice);
     for (let i = 0; i < this.cellEls.length; i++) {
       const cell = this.cellEls[i];
       const inner = cell.firstChild;
@@ -542,6 +556,10 @@ export class UI {
         if (n >= 2) cls += ' hint2'; else if (n === 1) cls += ' hint1';
       }
       if (this.cursor === i) cls += ' cursor';
+      if (choice) {
+        if (pick.has(i)) cls += ' pick'; else if (cand.has(i)) cls += ' cand'; else if (v) cls += ' dim';
+        if (i === g.pending.placedIdx) cls += ' placed';
+      }
       cell.className = cls;
       if (!v && open) {
         inner.dataset.ghost = ghost;
@@ -584,6 +602,7 @@ export class UI {
       const cnt = box.querySelector('.goal-count');
       if (cnt) cnt.textContent = goalCountText(goal.def, s, g);
       this.updateGoalButtons(side);
+      box.classList.toggle('choosing', g.status === 'choosing' && !!g.choiceStep() && g.choiceStep().side === side);
     }
   }
 
@@ -754,7 +773,8 @@ export class UI {
     const peek = g.upcoming(s.peekCount);
     this.el.upcoming.innerHTML = s.peekCount ? peek.map((c) => pieceHTML(c, 'smallcard')).join('') : '<span class="hint-text">hidden</span>';
     let hint = '';
-    if (g.status === 'playing') {
+    if (g.status === 'choosing') hint = 'Several sets of tiles could clear this goal. Tap a dotted tile to switch to a set that uses it, tap the placed tile to cycle through the options, and tap a lit tile (or "Use these") to confirm.';
+    else if (g.status === 'playing') {
       if (g.current) hint = `Tap an empty cell to place the ${pieceWord(s)}.`;
       if (s.wardSpend === 'manual' && g.wards > 0) {
         const uses = [];
@@ -767,6 +787,7 @@ export class UI {
       }
     }
     this.el.hintText.textContent = hint;
+    this.renderChooser();
     this.el.btnBot.classList.toggle('on', this.bot);
     this.el.btnHints.classList.toggle('on', s.hints);
     this.el.btnPause.innerHTML = ICONS[this.paused ? 'play' : 'pause'];
@@ -783,6 +804,10 @@ export class UI {
       switch (ev.type) {
         case 'place':
           this.flashCell(ev.idx, 'pop');
+          break;
+        case 'choose':
+          this.toast(`${ev.name}: ${ev.options} ways to clear it. Tap the tiles to use.`);
+          this.log(`Choose which tiles clear ${ev.name} (${ev.options} options)`);
           break;
         case 'curse':
           this.flashCell(ev.idx, 'shake');
@@ -921,10 +946,12 @@ export class UI {
   // ---------- input ----------
   act(i) {
     const g = this.game;
-    if (!g || this.paused || this.modalOpen() || g.status !== 'playing') return;
+    if (!g || this.paused || this.modalOpen()) return;
+    if (g.status === 'choosing') { this.chooseTap(i); return; }
+    if (g.status !== 'playing') return;
     if (g.canPlace(i)) {
       this.pushHistory();
-      g.place(i);
+      g.place(i, { ask: true });
     } else if (g.cells[i] && g.cells[i].kind === 'curse' && g.inBounds(i)) {
       this.pushHistory();
       if (!g.spendWard(i)) {
@@ -934,6 +961,56 @@ export class UI {
       }
     } else return;
     this.afterAction();
+  }
+
+  // ---------- choosing which tiles clear a goal ----------
+  // Tap a dotted tile: switch to the next candidate set that uses it.
+  // Tap the placed tile: cycle through every option. Tap a lit tile: confirm.
+  chooseTap(i) {
+    const g = this.game, p = g.pending, c = g.choiceStep();
+    if (!p || !c) return;
+    const sets = c.sets, cur = c.choice;
+    if (i === p.placedIdx) { this.cycleChoice(1); return; }
+    if (sets[cur].includes(i)) { this.confirmChoice(); return; }
+    for (let step = 1; step < sets.length; step++) {
+      const k = (cur + step) % sets.length;
+      if (sets[k].includes(i)) { this.selectChoice(k); return; }
+    }
+  }
+
+  selectChoice(k) {
+    if (this.game.selectChoice(k)) this.renderAll();
+  }
+
+  cycleChoice(d) {
+    const c = this.game.choiceStep();
+    if (!c) return;
+    this.selectChoice((c.choice + d + c.sets.length) % c.sets.length);
+  }
+
+  confirmChoice() {
+    const g = this.game;
+    if (!g || g.status !== 'choosing' || this.paused || this.modalOpen()) return;
+    g.choose();
+    this.afterAction();
+  }
+
+  renderChooser() {
+    const g = this.game, s = this.settings;
+    const c = g.status === 'choosing' ? g.choiceStep() : null;
+    this.el.chooser.hidden = !c;
+    this.el.trayCurrent.hidden = !!c;
+    this.el.trayNext.hidden = !!c;
+    if (!c) return;
+    const n = c.sets.length, k = c.choice + 1;
+    const left = g.pending.clears.slice(g.pending.step + 1).filter((x) => x.sets.length > 1).length;
+    this.el.chooser.innerHTML =
+      `<div class="chooser-head">${goalBadgeHTML(c.goal.def, s, g)}<span class="chooser-goal s-${c.side}">${esc(c.goal.def.name)}</span></div>` +
+      `<div class="chooser-btns"><button type="button" data-choose="prev" title="Previous option ([)" aria-label="Previous option">&lsaquo;</button>` +
+      `<span class="chooser-n">${k} / ${n}</span>` +
+      `<button type="button" data-choose="next" title="Next option (])" aria-label="Next option">&rsaquo;</button>` +
+      `<button type="button" class="primary chooser-ok" data-choose="ok" title="Use the lit tiles (Enter)">Use these</button></div>` +
+      (left ? `<div class="chooser-more">${left} more goal${left > 1 ? 's' : ''} to choose for</div>` : '');
   }
 
   refreshNext() {
@@ -1033,7 +1110,8 @@ export class UI {
     else if (k === 'ArrowDown') { e.preventDefault(); this.moveCursor(1, 0); }
     else if (k === 'ArrowLeft') { e.preventDefault(); this.moveCursor(0, -1); }
     else if (k === 'ArrowRight') { e.preventDefault(); this.moveCursor(0, 1); }
-    else if (k === 'Enter' || k === ' ') { e.preventDefault(); if (this.cursor != null) this.act(this.cursor); }
+    else if (k === 'Enter' || k === ' ') { e.preventDefault(); if (this.cursor != null) this.act(this.cursor); else if (this.game && this.game.status === 'choosing') this.confirmChoice(); }
+    else if (k === '[' || k === ']') { if (this.game && this.game.status === 'choosing') this.cycleChoice(k === '[' ? -1 : 1); }
   }
 
   moveCursor(dr, dc) {
@@ -1142,6 +1220,7 @@ export class UI {
       deckPara +
       `<h3>Controls</h3><ul>` +
       `<li>Click or tap an empty cell to place the card; hover shows a preview.</li>` +
+      `<li>When several sets of ${w}s could clear a goal, the candidates light up and the timers wait: tap a dotted ${w} to switch to a set that uses it, tap the ${w} you just placed to cycle through the options, and tap a lit ${w} (or "Use these") to confirm. <kbd>[</kbd> <kbd>]</kbd> cycle, <kbd>Enter</kbd> confirms.</li>` +
       `<li>Click a glowing curse to remove it with a ward. The two small buttons under each goal replace it (↻) or add time to it (clock); the goal itself opens its full description.</li>` +
       `<li><kbd>←↑↓→</kbd> move a cursor, <kbd>Enter</kbd> or <kbd>Space</kbd> acts on it.</li>` +
       `<li><kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>R</kbd> skip the upcoming tiles · <kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
@@ -1231,6 +1310,7 @@ export class UI {
     const w = pieceWord(s);
     lines.push(`Chains are ${s.chainShape === 'path' ? 'snake paths (bends allowed, no branching)' : 'any connected group'}.${s.deckType === 'cards' ? ` Straights are ${s.straightLen} cards${s.straightOrdered ? ' and must run in order' : ''}; flushes are ${s.flushLen} cards.` : ''}`);
     lines.push(`${s.mustIncludePlaced ? `The ${w} you just placed must be part of the goal you complete.` : 'Any placement clears a goal the board already satisfies.'} ${s.clearedCardsRemoved ? `Cleared ${w}s leave the board.` : `Cleared ${w}s stay on the board.`}`);
+    if (s.chooseClears) lines.push(`When more than one set of ${w}s could clear a goal, the game waits and lets you tap which ${w}s to use.`);
     lines.push(`Each clear earns ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'}; ${s.wardSpend === 'manual' ? 'click a curse to spend one' : 'they are spent automatically on a random curse'}.`);
     const perks = [];
     if (s.perkExtraWard) perks.push('an extra ward');
@@ -1516,6 +1596,7 @@ export class UI {
     const g = this.game;
     if (g) {
       const active = !this.paused && !this.modalOpen();
+      if (g.status === 'choosing' && this.bot && active) { g.autoChoose(); this.afterAction(); }
       if (g.status === 'playing' && active) {
         g.tick(dt);
         if (this.bot && g.status === 'playing') {

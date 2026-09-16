@@ -483,3 +483,94 @@ test('combo and streak multiply together: 50 + 100 + 200 at once is ×4, and a s
   assert.equal(g.score, before + 375);
   assert.equal(g.streak, 2, 'the streak grows by one per clearing placement, whatever the size of the combo');
 });
+
+// ---------- choosing which tiles clear a goal ----------
+const twoWayPair = (overrides = {}) => {
+  const s = { ...onlyGoals(['pair']), curseCount: 0, chooseClears: true, ...overrides };
+  const g = new Game(s, 'choose');
+  g.goals.right = null; g.goals.bottom = null; g.goals.left = null;
+  g.cells.fill(null);
+  // 7S at (0,0) and 7D at (0,2); placing a 7H at (0,1) makes a pair either way.
+  g.cells[0] = makeCard(7, 0, 900); g.cells[2] = makeCard(7, 2, 902);
+  g.current = makeCard(7, 1, 901);
+  g.drain();
+  return g;
+};
+
+test('findAllSatisfying lists every distinct set once, in search order', () => {
+  const g = twoWayPair();
+  g.cells[1] = g.current;
+  const sets = awaitGoals.findAllSatisfying(g, g.s, GOAL_BY_ID.pair, 1);
+  assert.deepEqual(sets.map((x) => x.slice().sort((a, b) => a - b)), [[0, 1], [1, 2]], 'the same pair reached from either end counts once');
+  assert.deepEqual(awaitGoals.findSatisfying(g, g.s, GOAL_BY_ID.pair, 1).slice().sort((a, b) => a - b), [0, 1], 'the first set is the default choice');
+});
+
+test('a placement with two ways to clear a goal waits for the player, then resolves with the chosen set', () => {
+  const g = twoWayPair();
+  const before = g.score;
+  assert.equal(g.place(1, { ask: true }), true);
+  assert.equal(g.status, 'choosing');
+  assert.equal(g.current, null, 'nothing is drawn while choosing');
+  assert.equal(g.score, before, 'nothing scores while choosing');
+  assert.ok(g.cells[0] && g.cells[2], 'no tile is removed while choosing');
+  const ev = g.drain().find((e) => e.type === 'choose');
+  assert.equal(ev.side, 'top'); assert.equal(ev.options, 2); assert.equal(ev.placedIdx, 1);
+  assert.equal(g.choiceStep().choice, 0);
+  assert.equal(g.selectChoice(5), false, 'out-of-range selections are refused');
+  assert.equal(g.choose(1), true, 'take the second set');
+  assert.equal(g.status, 'playing');
+  assert.equal(g.pending, null);
+  assert.equal(g.score, before + 10);
+  assert.ok(g.cells[0], 'the 7S of the other option stays on the board');
+  assert.equal(g.cells[1], null); assert.equal(g.cells[2], null);
+  assert.ok(g.current, 'the next tile is drawn once the choice is made');
+  const clear = g.drain().find((e) => e.type === 'clear');
+  assert.deepEqual(clear.clears[0].cells.slice().sort((a, b) => a - b), [1, 2]);
+  g.tick(1);
+});
+
+test('with the choose rule off, or without ask, the first set is taken at once', () => {
+  let g = twoWayPair({ chooseClears: false });
+  g.place(1, { ask: true });
+  assert.equal(g.status, 'playing');
+  assert.equal(g.cells[0], null, 'first set: the placed tile and its left neighbour'); assert.ok(g.cells[2]);
+  g = twoWayPair();
+  g.place(1);
+  assert.equal(g.status, 'playing', 'bots and timeouts never ask');
+  assert.equal(g.cells[0], null); assert.ok(g.cells[2]);
+});
+
+test('only one qualifying set: no choice is asked', () => {
+  const g = twoWayPair();
+  g.cells[2] = null;
+  g.place(1, { ask: true });
+  assert.equal(g.status, 'playing');
+  assert.equal(g.cells[0], null);
+});
+
+test('autoChoose resolves a pending choice with the selected set, and undo restores the moment before the placement', () => {
+  const g = twoWayPair();
+  const snap = g.snapshot();
+  g.place(1, { ask: true });
+  assert.equal(g.status, 'choosing');
+  const mid = g.snapshot();
+  assert.equal(mid.status, 'choosing'); assert.equal(mid.pending.clears[0].sets.length, 2);
+  g.restore(snap);
+  assert.equal(g.status, 'playing'); assert.equal(g.pending, null); assert.ok(g.cells[0] && g.cells[2] && g.cells[1] == null && g.current);
+  g.restore(mid);
+  assert.equal(g.status, 'choosing');
+  assert.equal(g.choiceStep().goal, g.goals.top, 'a restored choice points at the live goal');
+  g.selectChoice(1);
+  g.autoChoose();
+  assert.equal(g.status, 'playing');
+  assert.ok(g.cells[0]); assert.equal(g.cells[2], null);
+});
+
+test('timers do not run while a choice is pending', () => {
+  const g = twoWayPair({ clock: 'time', goalSeconds: 30 });
+  g.place(1, { ask: true });
+  const left = g.goals.top.timeLeft, elapsed = g.elapsed;
+  g.tick(5);
+  assert.equal(g.goals.top.timeLeft, left);
+  assert.equal(g.elapsed, elapsed);
+});

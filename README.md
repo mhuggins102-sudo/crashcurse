@@ -77,6 +77,7 @@ From the CLI instead: `npx wrangler pages deploy public --project-name crashcurs
 On a phone the whole game fits on one screen: the board in the middle, the drawn tile and quick stats in a tray at the bottom, and everything else behind the ☰ menu (pause, new game, hints, bot, stats & log, rules, settings). The page ships a web manifest and icons, so "Add to Home Screen" installs it full-screen.
 
 - Click an empty cell to place the drawn card (hover previews it).
+- When more than one set of tiles could clear a goal, the game waits (timers included) and lights up the candidates: tap a dotted tile to switch to a set that uses it, tap the tile you just placed to cycle through the options, and tap a lit tile (or "Use these") to confirm. `[` `]` cycle, `Enter` confirms. Turn it off in Settings → Placement & clearing to always take the first set found (the smallest, then the one reaching up or left from the placed tile).
 - Click a glowing curse to remove it with a ward.
 - Arrow keys move a cursor; Enter/Space acts on it.
 - `U` (or `Ctrl`+`Z`) undoes the last placement or ward use, clock and draw included; undo is unlimited by default, with a per-game slider and an optional ward cost in Settings.
