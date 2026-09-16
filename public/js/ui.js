@@ -13,7 +13,7 @@ import { makeRng, randomSeedString } from './rng.js';
 
 const SIDE_LABEL = { top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left' };
 const SIDE_ARROW = { top: '▲', right: '▶', bottom: '▼', left: '◀' };
-const MULTI_WORDS = ['', '', 'DOUBLE', 'TRIPLE', 'QUADRUPLE'];
+const COMBO_WORDS = ['', '', 'DOUBLE', 'TRIPLE', 'QUADRUPLE'];
 const BEST_KEY = 'crashcurse.best.v1';
 const DESC_KEYS = new Set(['straightLen', 'flushLen', 'straightOrdered', 'lineLowAvg', 'lineHighAvg', 'chainShape', 'tileColors', 'deckType', 'lineMinLen', 'numColors', 'numMax', 'numCopies']);
 
@@ -52,7 +52,7 @@ const ROW_VISIBLE = {
   levelBoard: (d) => d.mode === 'survival',
   levelBonus: (d) => d.mode === 'survival',
   perkExtraSeconds: (d) => d.clock === 'time',
-  comboBonus: (d) => d.comboEnabled,
+  streakBonus: (d) => d.streakEnabled,
   rerollBonus: (d) => d.rerollTimer === 'add' && d.wardCostReroll > 0 && d.wardSpend === 'manual',
   rerollTimer: (d) => d.wardCostReroll > 0 && d.wardSpend === 'manual',
   extendBonus: (d) => d.wardCostExtend > 0 && d.wardSpend === 'manual',
@@ -93,7 +93,7 @@ const ICONS = {
   clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   turns: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   level: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  combo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 9-13h-6z" fill="currentColor"/></svg>',
+  streak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 9-13h-6z" fill="currentColor"/></svg>',
   curse: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.4 4.3 3 5.3V19a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-3.7c1.6-1 3-2.7 3-5.3a7 7 0 0 0-7-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="11" r="1.5" fill="currentColor"/><circle cx="14.5" cy="11" r="1.5" fill="currentColor"/></svg>',
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 12a8 8 0 1 1 2.3 5.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   skip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l8 7-8 7zM14 5l8 7-8 7z" fill="currentColor"/></svg>',
@@ -451,7 +451,7 @@ export class UI {
   buildHud() {
     const s = this.settings;
     const rows = [
-      ['score', 'Score'], ['combo', 'Combo'], ['wards', 'Wards'],
+      ['score', 'Score'], ['streak', 'Streak'], ['wards', 'Wards'],
       ['level', 'Level', s.mode === 'survival'], ['levelTime', s.clock === 'time' ? 'Level ends in' : 'Level ends in', s.mode === 'survival'],
       ['global', 'Next wall in', s.wallMode === 'global'],
       ['elapsed', 'Time'], ['placed', 'Placed'],
@@ -479,7 +479,7 @@ export class UI {
       ['time', 'clock', 'Time', s.clock === 'time'],
       ['level', 'level', 'Level · time left', s.mode === 'survival'],
       ['global', 'clock', 'Next wall in', s.wallMode === 'global'],
-      ['combo', 'combo', 'Combo'],
+      ['streak', 'streak', 'Streak: bonus on your next clear'],
     ];
     this.el.chips.innerHTML = '';
     this.chip = {};
@@ -504,9 +504,9 @@ export class UI {
       c.level.el.classList.toggle('warn', s.clock === 'time' ? g.levelLeft < 10 : g.levelLeft <= 3);
     }
     if (c.global) c.global.b.textContent = s.clock === 'time' ? `${Math.ceil(g.globalLeft)}s` : `${g.globalLeft}`;
-    const mult = 1 + g.combo * s.comboBonus;
-    c.combo.el.hidden = !(s.comboEnabled && g.combo > 0);
-    c.combo.b.textContent = `×${mult.toFixed(2).replace(/\.?0+$/, '')}`;
+    const mult = 1 + g.streak * s.streakBonus;
+    c.streak.el.hidden = !(s.streakEnabled && g.streak > 0);
+    c.streak.b.textContent = `×${mult.toFixed(2).replace(/\.?0+$/, '')}`;
   }
 
   // ---------- rendering ----------
@@ -730,10 +730,10 @@ export class UI {
     st.score.b.textContent = g.score;
     this.el.topScore.textContent = g.score;
     this.el.topBest.textContent = Math.max(this.best, g.score);
-    if (s.comboEnabled) {
-      const mult = 1 + g.combo * s.comboBonus;
-      st.combo.b.textContent = g.combo > 0 ? `${g.combo} (×${mult.toFixed(2).replace(/\.?0+$/, '')})` : '—';
-    } else st.combo.b.textContent = 'off';
+    if (s.streakEnabled) {
+      const mult = 1 + g.streak * s.streakBonus;
+      st.streak.b.textContent = g.streak > 0 ? `${g.streak} (×${mult.toFixed(2).replace(/\.?0+$/, '')})` : '—';
+    } else st.streak.b.textContent = 'off';
     st.wards.b.textContent = s.wardSpend === 'manual' ? `${g.wards} ${g.wards === 1 ? 'ward' : 'wards'}` : 'auto';
     if (st.level) st.level.b.textContent = g.level;
     st.placed.b.textContent = g.placements;
@@ -794,9 +794,12 @@ export class UI {
           break;
         case 'clear': {
           const names = ev.clears.map((c) => c.name).join(' + ');
-          const word = (ev.source === 'wall' ? 'WALL CLEAR! ' : '') + (ev.n >= 2 ? `${MULTI_WORDS[Math.min(ev.n, 4)]} CLEAR! ` : '');
+          const word = (ev.source === 'wall' ? 'WALL CLEAR! ' : '') + (ev.n >= 2 ? `${COMBO_WORDS[Math.min(ev.n, 4)]} COMBO! ` : '');
           this.toast(`${word}${names}  +${ev.points}`, ev.n >= 2 ? 'great' : 'good');
-          this.log(`${word}${names} +${ev.points}${ev.comboMult > 1 ? ` (combo ×${ev.comboMult.toFixed(2).replace(/\.?0+$/, '')})` : ''}`, ev.n >= 2 ? 'great' : 'good');
+          const bonus = [];
+          if (ev.comboMult > 1) bonus.push(`combo ×${ev.comboMult}`);
+          if (ev.streakMult > 1) bonus.push(`streak ×${ev.streakMult.toFixed(2).replace(/\.?0+$/, '')}`);
+          this.log(`${word}${names} +${ev.points}${bonus.length ? ` (${bonus.join(', ')})` : ''}`, ev.n >= 2 ? 'great' : 'good');
           for (const r of ev.removed) this.ghost(r.idx, r.card, 'clear');
           if (!ev.removed.length) for (const c of ev.clears) for (const i of c.cells) this.flashCell(i, 'pop');
           this.pop(ev.placedIdx, `+${ev.points}`, ev.n >= 2 ? 'big' : '');
@@ -1093,15 +1096,15 @@ export class UI {
       try { localStorage.setItem(BEST_KEY, String(this.best)); } catch (e) { /* ignore */ }
       bestNote = '<div class="over-best">New best score!</div>';
     }
-    const multi = Object.entries(st.multiClears).map(([n, k]) => `${k}× ${MULTI_WORDS[Math.min(+n, 4)].toLowerCase()}`).join(', ') || 'none';
+    const combos = Object.entries(st.combos).map(([n, k]) => `${k}× ${COMBO_WORDS[Math.min(+n, 4)].toLowerCase()}`).join(', ') || 'none';
     const walls = Object.values(st.wallMoves).reduce((a, b) => a + b, 0);
     const rows = [
       ['Time survived', fmtTime(g.elapsed)],
       ['Level reached', s.mode === 'survival' ? g.level : '—'],
       ['Cards placed', g.placements],
       ['Goals cleared', st.clears],
-      ['Multi-clears', multi],
-      ['Best combo', st.maxCombo],
+      ['Combos', combos],
+      ['Best streak', st.maxStreak],
       ['Goals expired', st.goalsExpired],
       ['Wall moves', walls],
       ['Cards crushed', st.cardsCrushed],
@@ -1170,7 +1173,7 @@ export class UI {
       `<li><span class="goal-flags"><span class="flag on">${FLAG_SVG.numOn}</span></span> ${valueWord(s0)} matter &nbsp;·&nbsp; <span class="goal-flags"><span class="flag off">${FLAG_SVG.numOff}</span></span> any ${valueWord(s0)}</li>` +
       `</ul>` +
       this.wardRulesHTML(this.settings) +
-      `<h3>Goal cards (${s0.deckType === 'num' ? 'numbered tiles' : s0.deckType === 'tiles' ? 'symbol tiles' : 'playing cards'})</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and multi-clear bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}. Switch the deck in Settings to see the other deck's goals.</p>` +
+      `<h3>Goal cards (${s0.deckType === 'num' ? 'numbered tiles' : s0.deckType === 'tiles' ? 'symbol tiles' : 'playing cards'})</h3><p class="help-p">Greyed goals are switched off in the current pool (Settings → Goal pool). Points are base values before combo and streak bonuses. The tag names the goal's family${this.settings.avoidSimilarGoals ? '; two goals from one family never show on the walls at the same time' : ''}. Switch the deck in Settings to see the other deck's goals.</p>` +
       this.goalListHTML(this.settings) +
       `<h3>Other cards</h3><dl class="goal-list"><dt>☠ Curse</dt><dd>Not a ${w}. When drawn it lands on a random empty cell and blocks it: nothing can be placed there, chains cannot pass through it, and a row or column containing it cannot be completed. Remove it by spending a ward (earned by clearing goals) or let a wall crush it.</dd></dl>` +
       `<h3>Current rules</h3><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` +
@@ -1235,8 +1238,8 @@ export class UI {
     if (s.perkPushAllWalls) perks.push('every wall pushed back one step');
     if (s.perkPurgeDeckCurses) perks.push(`${s.perkPurgeDeckCurses} curse${s.perkPurgeDeckCurses > 1 ? 's' : ''} purged from the deck`);
     if (s.perkExtraSeconds && t) perks.push(`+${s.perkExtraSeconds}s on every goal`);
-    lines.push(`Clearing 2+ goals with one card multiplies the points by ${s.multiMult} per extra goal${perks.length ? ' and grants ' + perks.join(', ') : ''}.`);
-    if (s.comboEnabled) lines.push(`Consecutive clearing placements build a combo worth +${Math.round(s.comboBonus * 100)}% per step.`);
+    lines.push(`Combo: clearing 2+ goals with one ${w} adds up their points and multiplies the total by ${s.comboMult} per extra goal${perks.length ? ', and grants ' + perks.join(', ') : ''}.`);
+    if (s.streakEnabled) lines.push(`Streak: every placement in a row that clears something adds +${Math.round(s.streakBonus * 100)}% to the next clear's points; a placement that clears nothing resets it.`);
     if (s.placementSeconds > 0 && t) lines.push(`You have ${s.placementSeconds}s to place each card, or it is ${s.placementTimeout === 'random' ? 'placed at random' : 'discarded'}.`);
     if (s.undoLimit > 0) lines.push(`Undo: ${s.undoLimit >= UNDO_UNLIMITED ? 'unlimited' : s.undoLimit + ' per game'}${s.undoWardCost > 0 ? `, ${s.undoWardCost} ward${s.undoWardCost === 1 ? '' : 's'} each` : ''}; it rewinds the clock and the draw as well.`);
     if (s.mode === 'survival') lines.push(`Survival: outlast ${t ? s.levelSeconds + ' seconds' : s.levelTurns + ' placements'} to finish a level (+${t ? s.levelSecondsGrowth + 's' : s.levelTurnsGrowth + ' turns'} each level). Each new level adds ${s.levelCurseGrowth} curse${s.levelCurseGrowth === 1 ? '' : 's'} and multiplies goal timers by ${s.levelPressureGrowth}.`);
@@ -1421,7 +1424,7 @@ export class UI {
   buildSimFieldset() {
     const fs = h('fieldset');
     fs.appendChild(h('legend', { text: 'Playtest simulation' }));
-    fs.appendChild(h('p', { class: 'help-p', text: 'A greedy bot plays the settings currently in this form (not yet applied). It grabs any clear it can see and otherwise builds next to matching cards, so treat the numbers as relative: which goals get cleared, how fast the walls win, how often multi-clears happen.' }));
+    fs.appendChild(h('p', { class: 'help-p', text: 'A greedy bot plays the settings currently in this form (not yet applied). It grabs any clear it can see and otherwise builds next to matching cards, so treat the numbers as relative: which goals get cleared, how fast the walls win, how often combos happen.' }));
     const row = h('div', { class: 'simrow' });
     const games = h('input', { type: 'number', min: 1, max: 200, value: 20 });
     const spm = h('input', { type: 'number', min: 0.2, max: 10, step: 0.1, value: 1.5 });
@@ -1472,8 +1475,8 @@ export class UI {
     const f = (m, d = 1) => `<td>${m.mean.toFixed(d)}</td><td>${m.median.toFixed(d)}</td><td>${(+m.min).toFixed(d)}</td><td>${(+m.max).toFixed(d)}</td>`;
     const rows = [
       ['Score', r.score, 0], ['Time survived (s)', r.elapsed, 0], ['Level reached', r.level, 1], ['Cards placed', r.placements, 0],
-      ['Goals cleared', r.clears, 1], ['Multi-clears', r.multiClears, 1], ['Goals expired', r.goalsExpired, 1], ['Wall moves', r.wallMoves, 1],
-      ['Curses drawn', r.cursesDrawn, 1], ['Curses removed', r.cursesRemoved, 1], ['Best combo', r.maxCombo, 1],
+      ['Goals cleared', r.clears, 1], ['Combos', r.combos, 1], ['Goals expired', r.goalsExpired, 1], ['Wall moves', r.wallMoves, 1],
+      ['Curses drawn', r.cursesDrawn, 1], ['Curses removed', r.cursesRemoved, 1], ['Best streak', r.maxStreak, 1],
     ];
     const reasons = Object.entries(r.reasons).map(([k, v]) => `${OVER_REASONS[k] || (k === 'capped' ? 'still alive at the move cap' : k)}: ${v}`).join(' · ');
     const goals = r.goals.slice().sort((a, b) => b.rate - a.rate);

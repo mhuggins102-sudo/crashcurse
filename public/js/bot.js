@@ -58,7 +58,7 @@ export function chooseMove(game, rng) {
     const cl = game.preview(i) || [];
     let pts = 0;
     for (const c of cl) pts += goalPoints(c.goal.def, game.s);
-    if (cl.length >= 2) pts *= Math.pow(game.s.multiMult, cl.length - 1);
+    if (cl.length >= 2) pts *= Math.pow(game.s.comboMult, cl.length - 1);
     const v = pts * 100 + potential(game, i) + rng() * 0.4;
     if (!best || v > best.v) best = { idx: i, v, clears: cl.length };
   }
@@ -125,12 +125,12 @@ export function aggregate(results, settings) {
     level: metric((r) => r.level),
     placements: metric((r) => r.placements),
     clears: metric((r) => r.stats.clears),
-    multiClears: metric((r) => Object.values(r.stats.multiClears).reduce((a, b) => a + b, 0)),
+    combos: metric((r) => Object.values(r.stats.combos).reduce((a, b) => a + b, 0)),
     cursesDrawn: metric((r) => r.stats.cursesDrawn),
     cursesRemoved: metric((r) => r.stats.cursesRemoved),
     wallMoves: metric((r) => Object.values(r.stats.wallMoves).reduce((a, b) => a + b, 0)),
     goalsExpired: metric((r) => r.stats.goalsExpired),
-    maxCombo: metric((r) => r.stats.maxCombo),
+    maxStreak: metric((r) => r.stats.maxStreak),
     reasons,
     goals,
   };

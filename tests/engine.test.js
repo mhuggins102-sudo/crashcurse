@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../public/js/engine.js';
 import { settings, parseCard } from './helpers.js';
-import { defaultSettings } from '../public/js/settings.js';
+import { defaultSettings, normalizeSettings } from '../public/js/settings.js';
 import { GOAL_BY_ID } from '../public/js/goals.js';
 import { makeCard, makeCurse } from '../public/js/cards.js';
 import { botStep } from '../public/js/bot.js';
@@ -49,12 +49,12 @@ test('placing a card that completes a goal scores, removes the cards and grants 
   const ev = g.drain().find((e) => e.type === 'clear');
   assert.ok(ev);
   assert.equal(ev.n, 1);
-  assert.equal(g.combo, 1);
+  assert.equal(g.streak, 1);
 });
 
-test('multi-clear applies the multiplier and perks', () => {
+test('a combo (2+ goals in one placement) applies the multiplier and perks', () => {
   const s = onlyGoals(['pair', 'fillRow']);
-  s.gridW = 3; s.gridH = 3; s.multiMult = 2; s.perkExtraWard = true; s.perkPurgeDeckCurses = 0; s.allowDuplicateGoals = false;
+  s.gridW = 3; s.gridH = 3; s.comboMult = 2; s.perkExtraWard = true; s.perkPurgeDeckCurses = 0; s.allowDuplicateGoals = false;
   const g = new Game(s, 'multi');
   // Arrange goals: pair on top, fillRow on right
   g.goals.top = { def: g.goalPool().find((d) => d.id === 'pair'), side: 'top', duration: 40, timeLeft: 40, id: 1 };
@@ -63,7 +63,7 @@ test('multi-clear applies the multiplier and perks', () => {
   g.cells.fill(null);
   g.cells[0] = makeCard(9, 1, 1); g.cells[1] = makeCard(5, 0, 2);
   g.current = makeCard(5, 2, 3);
-  g.wards = 0; g.combo = 0;
+  g.wards = 0; g.streak = 0;
   g.place(2);
   const ev = g.drain().find((e) => e.type === 'clear');
   assert.equal(ev.n, 2);
@@ -309,12 +309,12 @@ test('after a wall crushes a column, a row that became full clears without a pla
   g.cells.fill(null);
   // row 0: three cards, the fourth (rightmost) cell empty; the right wall will crush that column
   g.cells[0] = makeCard(2, 0, 1); g.cells[1] = makeCard(5, 1, 2); g.cells[2] = makeCard(9, 2, 3);
-  g.combo = 2;
+  g.streak = 2;
   const before = g.score;
   g.advanceWall('right', 'test');
   assert.equal(g.cells[0], null, 'the completed row cleared');
   assert.ok(g.score > before);
-  assert.equal(g.combo, 2, 'a wall clear does not touch the combo');
+  assert.equal(g.streak, 2, 'a wall clear does not touch the streak');
   assert.equal(g.stats.wallClears, 1);
   const ev = g.drain().find((e) => e.type === 'clear');
   assert.equal(ev.source, 'wall');
@@ -451,4 +451,35 @@ test('goals cycle through the whole pool before repeating, and a wall never gets
   g.newGoal('top');
   g.restore(snap);
   assert.deepEqual(g.goalDeck, snap.goalDeck, 'undo restores the goal deck too');
+});
+
+test('renamed settings keys (multiMult, comboEnabled, comboBonus) still load from old saves and links', () => {
+  const s = normalizeSettings({ multiMult: 3, comboEnabled: false, comboBonus: 0.5 });
+  assert.equal(s.comboMult, 3);
+  assert.equal(s.streakEnabled, false);
+  assert.equal(s.streakBonus, 0.5);
+  assert.equal(normalizeSettings({ multiMult: 3, comboMult: 1.5 }).comboMult, 1.5, 'a new key wins over an old one');
+});
+
+test('combo and streak multiply together: 50 + 100 + 200 at once is ×4, and a streak of 1 adds ×1.25', () => {
+  const s = onlyGoals(['pair', 'fillRow']);
+  s.gridW = 3; s.gridH = 3; s.comboMult = 2; s.streakEnabled = true; s.streakBonus = 0.25; s.perkPurgeDeckCurses = 0; s.allowDuplicateGoals = false;
+  s.goalPoints = { ...s.goalPoints, pair: 50, fillRow: 100 };
+  const g = new Game(s, 'combo-streak');
+  g.goals.top = { def: g.goalPool().find((d) => d.id === 'pair'), side: 'top', duration: 40, timeLeft: 40, id: 1 };
+  g.goals.right = { def: g.goalPool().find((d) => d.id === 'fillRow'), side: 'right', duration: 40, timeLeft: 40, id: 2 };
+  g.goals.bottom = null; g.goals.left = null;
+  g.cells.fill(null);
+  g.cells[0] = makeCard(9, 1, 1); g.cells[1] = makeCard(5, 0, 2);
+  g.current = makeCard(5, 2, 3);
+  g.streak = 1; // the previous placement cleared something
+  const before = g.score;
+  g.place(2);
+  const ev = g.drain().find((e) => e.type === 'clear');
+  assert.equal(ev.n, 2);
+  assert.equal(ev.comboMult, 2);
+  assert.equal(ev.streakMult, 1.25);
+  assert.equal(ev.points, Math.round((50 + 100) * 2 * 1.25));
+  assert.equal(g.score, before + 375);
+  assert.equal(g.streak, 2, 'the streak grows by one per clearing placement, whatever the size of the combo');
 });

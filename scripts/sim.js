@@ -23,7 +23,7 @@ console.log('  survived (s) ', f(r.elapsed));
 console.log('  level        ', f(r.level));
 console.log('  placements   ', f(r.placements));
 console.log('  clears       ', f(r.clears));
-console.log('  multi-clears ', f(r.multiClears));
+console.log('  combos       ', f(r.combos));
 console.log('  expired      ', f(r.goalsExpired));
 console.log('  wall moves   ', f(r.wallMoves));
 console.log('  curses drawn ', f(r.cursesDrawn), ' removed', f(r.cursesRemoved));

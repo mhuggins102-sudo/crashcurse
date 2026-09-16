@@ -92,13 +92,26 @@ On a phone the whole game fits on one screen: the board in the middle, the drawn
 | Chains | snake paths (bends, no branching); for cards, straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
 | Walls | turn clock: each wall's goal lasts 15 placements; expiry moves that wall in; timers shrink 10 % per 20 placements; right after a crush, goals the board already satisfies clear | Walls & timing |
-| Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal (keeps its time plus a bonus by default), extending a goal by a few turns, or skipping the upcoming tiles; pushing a wall back is available but off by default; every use has its own cost | Wards |
-| Multi-clear | ×2 points per extra goal, +1 ward, 1 curse purged from the deck | Multi-clear perks |
-| Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
+| Wards | one per clear (plus one for a combo); spend on removing a curse, replacing a goal (keeps its time plus a bonus by default), extending a goal by a few turns, or skipping the upcoming tiles; pushing a wall back is available but off by default; every use has its own cost | Wards |
+| Combo (2+ goals in one placement) | ×2 points per extra goal, +1 ward, 1 curse purged from the deck | Combo perks |
+| Scoring | per-goal base points; streak +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |
 
 Presets (Chill, Action, Brutal, Turn-based, Global timer, Survival, Number tiles, Symbol tiles, Playing cards, Poker only)
 are starting points; load one, tweak, apply.
+
+### Scoring
+
+Every clearing placement scores
+
+```
+points = round( sum of base points × comboMult^(goals − 1) × (1 + streak × streakBonus) )
+```
+
+- **Combo** = two or more goals cleared by one placement. Their base points are added up, then multiplied by `comboMult` (default 2) for each goal beyond the first: 50 + 100 at once is 150 × 2 = 300; 50 + 100 + 200 at once is 350 × 4 = 1400. A combo also grants the combo perks (an extra ward and a curse purged from the deck by default).
+- **Streak** = consecutive placements that each cleared something. The streak counter is how many clearing placements came before this one in a row, so the first clear is ×1, the next placement that clears is ×1.25, then ×1.5, and so on (`streakBonus` 0.25 per step). A placement that clears nothing resets it. Combo and streak multiply together: a two-goal combo right after another clear is ×2 × ×1.25 = ×2.5. The streak chip in the tray shows the multiplier your next clear would get.
+- **Wall clears** (a wall completing a line by shortening it) score base points only and leave the streak untouched.
+- A **crushed curse** leaves the board and follows *Removed curses return to the discard pile*: on (default) it goes to the discard pile and comes back with the next reshuffle, off means it is gone for good. *When a wall crushes a curse* can instead make it jump to a random open cell.
 
 ### Goal shapes
 

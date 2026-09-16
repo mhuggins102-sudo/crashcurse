@@ -29,7 +29,7 @@ export class Game {
     this.goals = { top: null, right: null, bottom: null, left: null };
     this.score = 0;
     this.scoreFrac = 0;
-    this.combo = 0;
+    this.streak = 0;
     this.wards = 0;
     this.level = 1;
     this.elapsed = 0;
@@ -50,8 +50,8 @@ export class Game {
     this.events = [];
     this.stats = {
       placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
-      multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
-      wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
+      combos: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
+      wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxStreak: 0,
       wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, refreshes: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0, undos: 0,
     };
     this.buildDeck();
@@ -247,23 +247,26 @@ export class Game {
   resolveClears(cleared, placedIdx, { viaWall = false } = {}) {
     const s = this.s;
     if (!cleared.length) {
-      if (s.comboEnabled && !viaWall) this.combo = 0;
+      if (s.streakEnabled && !viaWall) this.streak = 0;
       return [];
     }
+    // Combo: 2+ goals cleared by one placement multiply the summed base points.
+    // Streak: consecutive clearing placements add a bonus on top. Wall clears
+    // (a wall completing a line) count for neither.
     const n = cleared.length;
     const base = cleared.reduce((a, c) => a + goalPoints(c.goal.def, s), 0);
-    const multi = n >= 2 ? Math.pow(s.multiMult, n - 1) : 1;
-    const comboMult = s.comboEnabled && !viaWall ? 1 + this.combo * s.comboBonus : 1;
-    const pts = Math.round(base * multi * comboMult);
-    const comboBefore = this.combo;
+    const comboMult = n >= 2 ? Math.pow(s.comboMult, n - 1) : 1;
+    const streakMult = s.streakEnabled && !viaWall ? 1 + this.streak * s.streakBonus : 1;
+    const pts = Math.round(base * comboMult * streakMult);
+    const streakBefore = this.streak;
     this.score += pts;
     if (!viaWall) {
-      this.combo += 1;
-      this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
+      this.streak += 1;
+      this.stats.maxStreak = Math.max(this.stats.maxStreak, this.streak);
     } else this.stats.wallClears += n;
     this.stats.clears += n;
     for (const c of cleared) this.stats.goalsCleared[c.goal.def.id] = (this.stats.goalsCleared[c.goal.def.id] || 0) + 1;
-    if (n >= 2) this.stats.multiClears[n] = (this.stats.multiClears[n] || 0) + 1;
+    if (n >= 2) this.stats.combos[n] = (this.stats.combos[n] || 0) + 1;
 
     const removed = [];
     const set = new Set();
@@ -303,7 +306,7 @@ export class Game {
     const clearedSides = cleared.map((c) => c.side);
     this.emit('clear', {
       clears: cleared.map((c) => ({ side: c.side, id: c.goal.def.id, name: c.goal.def.name, cells: c.cells, points: goalPoints(c.goal.def, s) })),
-      points: pts, n, multi, comboMult, combo: comboBefore, removed, wardsGained, perks, placedIdx, source: viaWall ? 'wall' : 'place',
+      points: pts, n, comboMult, streakMult, streak: streakBefore, removed, wardsGained, perks, placedIdx, source: viaWall ? 'wall' : 'place',
     });
     for (const side of clearedSides) this.newGoal(side);
     if (s.wardSpend === 'auto') this.autoSpendWards();
@@ -759,7 +762,7 @@ export class Game {
     }
     return {
       cells: this.cells.slice(), inset: { ...this.inset }, deck: this.deck.slice(), discard: this.discard.slice(),
-      current: this.current, goals, score: this.score, scoreFrac: this.scoreFrac, combo: this.combo, wards: this.wards,
+      current: this.current, goals, score: this.score, scoreFrac: this.scoreFrac, streak: this.streak, wards: this.wards,
       level: this.level, elapsed: this.elapsed, levelElapsed: this.levelElapsed, placements: this.placements,
       levelPlacements: this.levelPlacements, goalBase: this.goalBase, curseCount: this.curseCount, levelLen: this.levelLen,
       levelLeft: this.levelLeft, globalLeft: this.globalLeft, rotateIdx: this.rotateIdx, placementLeft: this.placementLeft,
@@ -776,7 +779,7 @@ export class Game {
       const g = snap.goals[side];
       this.goals[side] = g ? { def: GOAL_BY_ID[g.defId], side: g.side, duration: g.duration, timeLeft: g.timeLeft, id: g.id } : null;
     }
-    this.score = snap.score; this.scoreFrac = snap.scoreFrac; this.combo = snap.combo; this.wards = snap.wards;
+    this.score = snap.score; this.scoreFrac = snap.scoreFrac; this.streak = snap.streak; this.wards = snap.wards;
     this.level = snap.level; this.elapsed = snap.elapsed; this.levelElapsed = snap.levelElapsed; this.placements = snap.placements;
     this.levelPlacements = snap.levelPlacements; this.goalBase = snap.goalBase; this.curseCount = snap.curseCount; this.levelLen = snap.levelLen;
     this.levelLeft = snap.levelLeft; this.globalLeft = snap.globalLeft; this.rotateIdx = snap.rotateIdx; this.placementLeft = snap.placementLeft;

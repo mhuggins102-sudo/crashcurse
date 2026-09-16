@@ -35,7 +35,8 @@ export const SETTINGS_SCHEMA = [
       { key: 'cursesReturn', label: 'Removed curses return to the discard pile', type: 'bool', def: true,
         help: 'Off means every curse you clear is gone for good. On keeps curse density constant when the deck reshuffles.' },
       { key: 'crushedCurses', label: 'When a wall crushes a curse', type: 'select', def: 'destroyed',
-        options: [['destroyed', 'It is destroyed'], ['relocate', 'It jumps to a random open cell']] },
+        options: [['destroyed', 'It leaves the board'], ['relocate', 'It jumps to a random open cell']],
+        help: 'A crushed curse that leaves the board follows "Removed curses return to the discard pile": into the discards for the next reshuffle, or gone for good.' },
       { key: 'curseOnNoSpace', label: 'Curse drawn with no empty cell', type: 'select', def: 'gameover',
         options: [['discard', 'Discard it'], ['gameover', 'Game over']] },
       { key: 'reshuffleDiscards', label: 'Reshuffle discards when the deck runs out', type: 'bool', def: true,
@@ -92,7 +93,7 @@ export const SETTINGS_SCHEMA = [
       { key: 'clearPushesWallBack', label: 'Clearing a goal pushes its wall back out one step', type: 'bool', def: false },
       { key: 'crushCheck', label: 'After a wall moves in, check goals without the placed-tile rule', type: 'select', def: 'all',
         options: [['all', 'Every goal'], ['lines', 'Only full row / column goals'], ['off', 'Off']],
-        help: 'A wall can complete a row or column by shortening it. This check clears goals the board already satisfies right after a crush, even though nothing was just placed. Such clears do not count toward the combo.' },
+        help: 'A wall can complete a row or column by shortening it. This check clears goals the board already satisfies right after a crush, even though nothing was just placed. Such clears do not count toward the streak.' },
       { key: 'placementSeconds', label: 'Placement timer (seconds, 0 = off)', type: 'range', min: 0, max: 30, step: 1, def: 0 },
       { key: 'placementTimeout', label: 'When the placement timer runs out', type: 'select', def: 'random',
         options: [['random', 'The card is placed on a random cell'], ['discard', 'The card is discarded']] },
@@ -127,10 +128,10 @@ export const SETTINGS_SCHEMA = [
     ],
   },
   {
-    group: 'Multi-clear perks (2+ goals in one placement)',
+    group: 'Combo perks (2+ goals cleared by one placement)',
     items: [
-      { key: 'multiMult', label: 'Score multiplier per extra goal', type: 'range', min: 1, max: 4, step: 0.5, def: 2,
-        help: 'Two goals at once: points × M. Three at once: points × M².' },
+      { key: 'comboMult', label: 'Combo: score multiplier per extra goal', type: 'range', min: 1, max: 4, step: 0.5, def: 2,
+        help: 'The base points of every goal cleared are added up, then multiplied by M for each goal beyond the first. Two goals at once: total × M. Three at once: total × M².' },
       { key: 'perkExtraWard', label: 'Extra ward', type: 'bool', def: true },
       { key: 'perkClearAllCurses', label: 'All curses on the board are removed', type: 'bool', def: false },
       { key: 'perkPushAllWalls', label: 'Every wall is pushed back out one step', type: 'bool', def: false },
@@ -141,8 +142,9 @@ export const SETTINGS_SCHEMA = [
   {
     group: 'Scoring',
     items: [
-      { key: 'comboEnabled', label: 'Combo: consecutive clearing placements multiply points', type: 'bool', def: true },
-      { key: 'comboBonus', label: 'Combo bonus per step (×(1 + step × bonus))', type: 'range', min: 0, max: 1, step: 0.05, def: 0.25 },
+      { key: 'streakEnabled', label: 'Streak: consecutive clearing placements multiply points', type: 'bool', def: true,
+        help: 'The streak counts placements in a row that cleared something. Each clear is worth ×(1 + streak × bonus), then the streak grows by one. A placement that clears nothing resets it; wall clears leave it alone.' },
+      { key: 'streakBonus', label: 'Streak bonus per step (×(1 + streak × bonus))', type: 'range', min: 0, max: 1, step: 0.05, def: 0.25 },
       { key: 'survivalPointsPerSec', label: 'Points per second survived', type: 'range', min: 0, max: 10, step: 1, def: 0 },
       { key: 'crushPenalty', label: 'Points lost per card crushed by a wall', type: 'range', min: 0, max: 50, step: 5, def: 0 },
       { key: 'expirePenaltyPoints', label: 'Points lost when a goal expires', type: 'range', min: 0, max: 200, step: 10, def: 0 },
@@ -198,7 +200,7 @@ export const PRESETS = {
   'Default': {},
   'Chill': { gridW: 7, gridH: 7, curseCount: 4, goalSeconds: 75, pressureRamp: 0.95, levelSeconds: 120 },
   'Action': { curseCount: 8, goalSeconds: 25, pressureRamp: 0.85, placementSeconds: 8, mode: 'survival', levelSeconds: 60 },
-  'Brutal': { gridW: 5, gridH: 5, curseCount: 12, goalSeconds: 20, pressureRamp: 0.8, expiredGoalPenalty: 'both', multiMult: 3, crushedCurses: 'relocate' },
+  'Brutal': { gridW: 5, gridH: 5, curseCount: 12, goalSeconds: 20, pressureRamp: 0.8, expiredGoalPenalty: 'both', comboMult: 3, crushedCurses: 'relocate' },
   'Turn-based': { clock: 'turns', goalTurns: 8, mode: 'endless' },
   'Global timer': { wallMode: 'global', globalSeconds: 25, expiredGoalPenalty: 'none' },
   'Survival': { mode: 'survival', levelSeconds: 90 },
@@ -219,7 +221,15 @@ export function applyPreset(base, name) {
 }
 
 // Clamp / validate every value against the schema; unknown keys are dropped.
+// Settings keys that were renamed; saved settings and share links may still use the old names.
+const LEGACY_KEYS = { multiMult: 'comboMult', comboEnabled: 'streakEnabled', comboBonus: 'streakBonus' };
+
 export function normalizeSettings(raw) {
+  if (raw) {
+    for (const [oldKey, newKey] of Object.entries(LEGACY_KEYS)) {
+      if (raw[oldKey] != null && raw[newKey] == null) raw = { ...raw, [newKey]: raw[oldKey] };
+    }
+  }
   const def = defaultSettings();
   const out = {};
   for (const it of SCHEMA_ITEMS) {
