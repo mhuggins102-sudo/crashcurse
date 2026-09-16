@@ -389,3 +389,26 @@ test('undo restores the board, timers, stats and the random state', () => {
   assert.deepEqual(g.deck.map((c) => c.id), g2.deck.map((c) => c.id), 'the draw after undo is the same draw');
   assert.equal(g.current.id, g2.current.id);
 });
+
+test('a ward can skip the upcoming tiles, dodging a visible curse', () => {
+  const s = settings({ peekCount: 2, wardCostRefresh: 1, wallMode: 'off', curseCount: 0, cursesReturn: true });
+  const g = new Game(s, 'refresh');
+  const top = g.deck[g.deck.length - 1], second = g.deck[g.deck.length - 2];
+  g.deck[g.deck.length - 1] = { kind: 'curse', id: 4242 };
+  g.wards = 1;
+  const deckBefore = g.deck.length, discardBefore = g.discard.length, current = g.current;
+  assert.equal(g.wardRefresh(), true);
+  assert.equal(g.deck.length, deckBefore - 2, 'the two shown tiles left the deck');
+  assert.equal(g.discard.length, discardBefore + 2, 'both went to the discard pile (curses return)');
+  assert.ok(g.deck.every((c) => c.id !== second.id && c.id !== 4242));
+  assert.equal(g.current, current, 'the drawn tile is untouched');
+  assert.equal(g.wards, 0);
+  assert.equal(g.wardRefresh(), false, 'no wards left');
+  assert.ok(g.drain().some((e) => e.type === 'refresh' && e.count === 2));
+  const s2 = settings({ wardCostRefresh: 0, wallMode: 'off', curseCount: 0 });
+  const g2 = new Game(s2, 'refresh2');
+  g2.wards = 3;
+  assert.equal(g2.wardRefresh(), false, 'cost 0 disables the use');
+  assert.equal(defaultSettings().undoLimit, 50, 'undo defaults to the unlimited sentinel');
+  assert.equal(defaultSettings().wardCostRefresh, 1);
+});

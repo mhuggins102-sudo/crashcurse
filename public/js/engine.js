@@ -52,7 +52,7 @@ export class Game {
       placements: 0, clears: 0, goalsOffered: {}, goalsCleared: {}, goalsExpired: 0, goalsExpiredBy: {},
       multiClears: {}, cursesDrawn: 0, cursesRemoved: 0, cursesCrushed: 0, cardsCrushed: 0,
       wallMoves: { top: 0, right: 0, bottom: 0, left: 0 }, wallRetreats: 0, maxCombo: 0,
-      wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0, undos: 0,
+      wardsEarned: 0, wardsSpent: 0, rerolls: 0, extends: 0, retreatsBought: 0, refreshes: 0, reshuffles: 0, levels: 1, discards: 0, autoplaced: 0, wallClears: 0, undos: 0,
     };
     this.buildDeck();
     for (const side of SIDES) this.newGoal(side);
@@ -559,7 +559,7 @@ export class Game {
 
   canAffordWard(kind) {
     const s = this.s;
-    const cost = { curse: s.wardCostCurse, reroll: s.wardCostReroll, retreat: s.wardCostRetreat, extend: s.wardCostExtend }[kind] || 0;
+    const cost = { curse: s.wardCostCurse, reroll: s.wardCostReroll, retreat: s.wardCostRetreat, extend: s.wardCostExtend, refresh: s.wardCostRefresh }[kind] || 0;
     return this.status === 'playing' && s.wardSpend === 'manual' && cost > 0 && this.wards >= cost ? cost : 0;
   }
 
@@ -604,7 +604,25 @@ export class Game {
     return true;
   }
 
-  // Ward use 4: push a wall back out one step.
+  // Ward use 4: skip the upcoming tiles (the ones shown as "next"); they go to the discard pile.
+  wardRefresh() {
+    const cost = this.canAffordWard('refresh');
+    if (!cost || this.deck.length === 0) return false;
+    const n = Math.max(1, this.s.peekCount || 0);
+    const skipped = [];
+    for (let k = 0; k < n && this.deck.length; k++) {
+      const c = this.deck.pop();
+      skipped.push(c);
+      if (c.kind !== 'curse' || this.s.cursesReturn) this.discard.push(c);
+    }
+    this.wards -= cost;
+    this.stats.wardsSpent += cost;
+    this.stats.refreshes++;
+    this.emit('refresh', { count: skipped.length, cards: skipped });
+    return true;
+  }
+
+  // Ward use 5: push a wall back out one step.
   wardRetreat(side) {
     const cost = this.canAffordWard('retreat');
     if (!cost || this.inset[side] <= 0) return false;

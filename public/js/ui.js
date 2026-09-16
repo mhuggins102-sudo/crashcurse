@@ -6,7 +6,7 @@ import { SIDES, GOAL_DEFS, goalDesc, goalDetail, goalNotes, goalPoints, goalEnab
 import { SUITS, RANK_LABELS, TILE_COLORS, TILE_COLOR_NAMES, SYMBOL_GLYPHS, SYMBOL_NAMES, pieceLabel } from './cards.js';
 import {
   SETTINGS_SCHEMA, SCHEMA_ITEMS, defaultSettings, loadSettings, saveSettings, normalizeSettings,
-  PRESETS, applyPreset, settingsToJSON, settingsFromJSON,
+  PRESETS, applyPreset, settingsToJSON, settingsFromJSON, UNDO_UNLIMITED,
 } from './settings.js';
 import { botStep, runSimulation } from './bot.js';
 import { makeRng, randomSeedString } from './rng.js';
@@ -96,6 +96,8 @@ const ICONS = {
   combo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 9-13h-6z" fill="currentColor"/></svg>',
   curse: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.4 4.3 3 5.3V19a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-3.7c1.6-1 3-2.7 3-5.3a7 7 0 0 0-7-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="11" r="1.5" fill="currentColor"/><circle cx="14.5" cy="11" r="1.5" fill="currentColor"/></svg>',
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 12a8 8 0 1 1 2.3 5.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  skip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l8 7-8 7zM14 5l8 7-8 7z" fill="currentColor"/></svg>',
+  goal: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
 // Relevance flags: does the goal care about colors? about numbers (symbols / ranks)?
@@ -225,7 +227,8 @@ export class UI {
       menu: $('menu'), menuSheet: $('menu-sheet'), btnMenu: $('btn-menu'), statsModal: $('modal-stats'), statsBody: $('stats-body'),
       grid: $('grid'), fx: $('fx'), pops: $('pops'),
       wall: Object.fromEntries(SIDES.map((s) => [s, $('wall-' + s)])),
-      goal: Object.fromEntries(SIDES.map((s) => [s, $('wall-' + s).querySelector('.goal')])),
+      goal: Object.fromEntries(SIDES.map((s) => [s, $('goal-' + s)])),
+      btnRefresh: $('btn-refresh'),
       current: $('current'), upcoming: $('upcoming'), hintText: $('hint-text'), placementTimer: $('placement-timer'),
       stats: $('stats'), log: $('log'), toasts: $('toasts'),
       topScore: $('top-score'), topBest: $('top-best'),
@@ -261,6 +264,7 @@ export class UI {
     this.el.statsModal.addEventListener('click', (e) => { if (e.target === this.el.statsModal) this.closeStats(); });
     this.el.btnNew.onclick = () => this.newGame();
     this.el.btnUndo.onclick = () => this.undo();
+    this.el.btnRefresh.onclick = (e) => { e.stopPropagation(); this.refreshNext(); };
     this.el.btnPause.onclick = () => this.togglePause();
     this.el.btnBot.onclick = () => this.toggleBot();
     this.el.btnHints.onclick = () => this.toggleHints();
@@ -394,7 +398,7 @@ export class UI {
     this.el.menuSheet.innerHTML =
       item('pause', this.paused ? 'play' : 'pause', this.paused ? 'Resume' : 'Pause', playing ? '' : 'not playing') +
       item('new', 'new', 'New game') +
-      item('undo', 'undo', 'Undo last move', s.undoLimit ? `${this.undosLeft()} left` : 'off') +
+      item('undo', 'undo', 'Undo last move', s.undoLimit ? this.undosLeftText() : 'off') +
       `<div class="sheet-sep"></div>` +
       item('hints', 'hints', 'Hints', s.hints ? 'on' : 'off', s.hints) +
       item('bot', 'bot', 'Bot autoplay', this.bot ? 'on' : 'off', this.bot) +
@@ -456,7 +460,8 @@ export class UI {
     // Compact chips shown next to the drawn tile (the whole row opens the stats popup).
     const chips = [
       ['wards', 'ward', 'Wards'], ['deck', 'deck', 'Tiles left in the deck · curses among them'],
-      ['time', s.clock === 'time' ? 'clock' : 'turns', s.clock === 'time' ? 'Time' : 'Tiles placed'],
+      ['clears', 'goal', 'Goals cleared'],
+      ['time', 'clock', 'Time', s.clock === 'time'],
       ['level', 'level', 'Level · time left', s.mode === 'survival'],
       ['global', 'clock', 'Next wall in', s.wallMode === 'global'],
       ['combo', 'combo', 'Combo'],
@@ -477,7 +482,8 @@ export class UI {
     c.wards.b.textContent = s.wardSpend === 'manual' ? g.wards : 'auto';
     c.wards.el.classList.toggle('hot', s.wardSpend === 'manual' && g.wards > 0);
     c.deck.b.innerHTML = `${g.deck.length}${s.showCursesInDeck ? ` <small>☠${g.cursesInDeck()}</small>` : ''}`;
-    c.time.b.textContent = s.clock === 'time' ? fmtTime(g.elapsed) : g.placements;
+    c.clears.b.textContent = g.stats.clears;
+    if (c.time) c.time.b.textContent = fmtTime(g.elapsed);
     if (c.level) {
       c.level.b.textContent = `${g.level} · ${s.clock === 'time' ? fmtTime(g.levelLeft) : g.levelLeft}`;
       c.level.el.classList.toggle('warn', s.clock === 'time' ? g.levelLeft < 10 : g.levelLeft <= 3);
@@ -544,14 +550,14 @@ export class UI {
       if (!goal) {
         if (box.dataset.gid !== 'none') {
           box.dataset.gid = 'none';
-          box.className = 'goal none';
+          box.className = `goal goal-${side} none`;
           box.innerHTML = `<div class="goal-side">${SIDE_ARROW[side]} ${SIDE_LABEL[side]}</div><div class="goal-name">No goal</div><div class="goal-desc">Enable goals in Settings</div>`;
         }
         continue;
       }
       if (box.dataset.gid !== String(goal.id)) {
         box.dataset.gid = String(goal.id);
-        box.className = 'goal';
+        box.className = `goal goal-${side}`;
         box.innerHTML = `<div class="goal-side">${SIDE_ARROW[side]} ${SIDE_LABEL[side]}</div>` +
           `<div class="goal-name">${goalBadgeHTML(goal.def, s, g)}${goalFlagsHTML(goal.def, s)}<span class="goal-title">${esc(goal.def.name)}</span></div>` +
           `<div class="goal-desc">${esc(goalDesc(goal.def, s))}</div>` +
@@ -740,6 +746,7 @@ export class UI {
         if (s.wardCostCurse > 0 && g.wards >= s.wardCostCurse && g.curseCells().length) uses.push('tap a glowing curse to remove it');
         if (s.wardCostReroll > 0 && g.wards >= s.wardCostReroll) uses.push('use the ↻ button under a goal to replace it');
         if (s.wardCostExtend > 0 && g.wards >= s.wardCostExtend) uses.push(`use the clock button to add ${s.extendBonus} ${s.clock === 'time' ? 'seconds' : 'turns'}`);
+        if (s.wardCostRefresh > 0 && g.wards >= s.wardCostRefresh) uses.push('use the ⏭ button by "Next" to skip the upcoming tiles');
         if (s.wardCostRetreat > 0 && g.wards >= s.wardCostRetreat && SIDES.some((x) => g.inset[x] > 0)) uses.push('tap a goal to push its wall back');
         if (uses.length) hint += ` Wards: ${uses.join(', or ')}.`;
       }
@@ -751,6 +758,7 @@ export class UI {
     this.el.btnPause.title = this.paused ? 'Resume (P)' : 'Pause (P)';
     this.renderChips();
     this.renderUndo();
+    this.renderRefresh();
   }
 
   // ---------- events → feedback ----------
@@ -797,6 +805,10 @@ export class UI {
         case 'goalSwap':
           this.toast(`${ev.from} no longer fits between the walls; replaced by ${ev.to}`);
           this.log(`${SIDE_LABEL[ev.side]} goal ${ev.from} no longer fits, replaced by ${ev.to}`);
+          break;
+        case 'refresh':
+          this.toast(`Skipped ${ev.count} upcoming tile${ev.count === 1 ? '' : 's'}`, 'good');
+          this.log(`Ward spent: skipped ${ev.cards.map((c) => cardText(c)).join(', ')}`, 'good');
           break;
         case 'extend':
           this.toast(`${ev.name} extended by ${ev.bonus} ${this.settings.clock === 'time' ? 'seconds' : 'turns'}`, 'good');
@@ -881,7 +893,7 @@ export class UI {
   }
 
   flashWall(side, cls) {
-    const w = this.el.wall[side];
+    const w = cls === 'hit' ? this.el.wall[side] : this.el.goal[side];
     w.classList.remove(cls);
     void w.offsetWidth;
     w.classList.add(cls);
@@ -906,6 +918,26 @@ export class UI {
     this.afterAction();
   }
 
+  refreshNext() {
+    const g = this.game;
+    if (!g || this.paused || this.modalOpen() || g.status !== 'playing') return;
+    this.pushHistory();
+    if (!g.wardRefresh()) { this.popHistory(); this.toast('Skipping the next tiles needs a ward', 'bad'); return; }
+    this.afterAction();
+  }
+
+  renderRefresh() {
+    const b = this.el.btnRefresh, g = this.game, s = this.settings;
+    if (!b || !g) return;
+    const on = s.wardSpend === 'manual' && s.wardCostRefresh > 0;
+    b.hidden = !on;
+    if (!on) return;
+    const ok = g.status === 'playing' && g.canAffordWard('refresh') > 0 && g.deck.length > 0;
+    b.disabled = !ok;
+    const n = Math.max(1, s.peekCount || 0);
+    b.title = `Skip the next ${n} tile${n === 1 ? '' : 's'} (R) · ${s.wardCostRefresh} ward${s.wardCostRefresh === 1 ? '' : 's'}`;
+  }
+
   // ---------- undo ----------
   pushHistory() {
     if (!this.settings.undoLimit) return;
@@ -915,7 +947,13 @@ export class UI {
 
   popHistory() { this.history.pop(); }
 
-  undosLeft() { return Math.max(0, (this.settings.undoLimit || 0) - this.undosUsed); }
+  undosLeft() {
+    const lim = this.settings.undoLimit || 0;
+    if (lim >= UNDO_UNLIMITED) return Infinity;
+    return Math.max(0, lim - this.undosUsed);
+  }
+
+  undosLeftText() { const n = this.undosLeft(); return n === Infinity ? 'unlimited' : `${n} left`; }
 
   undo() {
     const g = this.game, s = this.settings;
@@ -934,8 +972,8 @@ export class UI {
     this.hideOverlay();
     this.hideGoalPopup();
     this.renderAll();
-    this.log(`Undo (${this.undosLeft()} left)`);
-    this.toast(`Undid the last move · ${this.undosLeft()} left`, 'good');
+    this.log(`Undo (${this.undosLeftText()})`);
+    this.toast(this.undosLeft() === Infinity ? 'Undid the last move' : `Undid the last move · ${this.undosLeftText()}`, 'good');
   }
 
   renderUndo() {
@@ -944,7 +982,7 @@ export class UI {
     const left = this.undosLeft();
     const can = !!(this.settings.undoLimit && this.history && this.history.length && left > 0);
     b.disabled = !can;
-    b.title = !this.settings.undoLimit ? 'Undo is off in Settings' : !this.history || !this.history.length ? 'Nothing to undo' : left <= 0 ? 'No undos left this game' : `Undo the last move (U) · ${left} left`;
+    b.title = !this.settings.undoLimit ? 'Undo is off in Settings' : !this.history || !this.history.length ? 'Nothing to undo' : left <= 0 ? 'No undos left this game' : `Undo the last move (U) · ${this.undosLeftText()}`;
   }
 
   afterAction() {
@@ -968,6 +1006,7 @@ export class UI {
     if (this.modalOpen()) return;
     if ((k === 'z' || k === 'Z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.undo(); return; }
     if (k === 'u' || k === 'U') this.undo();
+    else if (k === 'r' || k === 'R') this.refreshNext();
     else if (k === 'p' || k === 'P') this.togglePause();
     else if (k === 'n' || k === 'N') this.newGame();
     else if (k === 'h' || k === 'H') this.toggleHints();
@@ -1054,7 +1093,7 @@ export class UI {
       ['Curses drawn / removed', `${st.cursesDrawn} / ${st.cursesRemoved}`],
       ['Wards earned / spent', `${st.wardsEarned} / ${st.wardsSpent}`],
       ['Goals replaced / extended', `${st.rerolls} / ${st.extends}`],
-      ['Walls pushed back', st.retreatsBought],
+      ['Walls pushed back / tiles skipped', `${st.retreatsBought} / ${st.refreshes || 0}`],
       ['Undos', st.undos || 0],
       ['Seed', g.seed],
     ];
@@ -1087,7 +1126,7 @@ export class UI {
       `<li>Click or tap an empty cell to place the card; hover shows a preview.</li>` +
       `<li>Click a glowing curse to remove it with a ward. The two small buttons under each goal replace it (↻) or add time to it (clock); the goal itself opens its full description.</li>` +
       `<li><kbd>←↑↓→</kbd> move a cursor, <kbd>Enter</kbd> or <kbd>Space</kbd> acts on it.</li>` +
-      `<li><kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
+      `<li><kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>R</kbd> skip the upcoming tiles · <kbd>P</kbd> pause · <kbd>N</kbd> new game · <kbd>H</kbd> hints · <kbd>B</kbd> bot autoplay · <kbd>Esc</kbd> close / pause</li>` +
       `</ul>` +
       `<h3>Definitions</h3><ul>` +
       `<li><b>Chain</b>: ${this.settings.chainShape === 'group' ? `any group of ${w}s connected up/down/left/right, branching allowed.` : `a snake of ${w}s connected up/down/left/right. It may bend as often as it likes but may not branch (a plus shape is not a chain), and each ${w} is used once.`} Diagonals never connect.</li>` +
@@ -1134,6 +1173,7 @@ export class UI {
     if (s.wardCostCurse > 0) uses.push(`<li><b>Remove a curse</b> (${s.wardCostCurse}): tap a glowing curse.</li>`);
     if (s.wardCostReroll > 0) uses.push(`<li><b>Replace a goal</b> (${s.wardCostReroll}): the ↻ button under a goal (or the goal's popup). The new goal ${s.rerollTimer === 'keep' ? 'keeps the remaining time' : s.rerollTimer === 'add' ? `keeps the remaining time plus ${s.rerollBonus} ${s.clock === 'time' ? 'seconds' : 'turns'}` : 'starts with a fresh timer'}.</li>`);
     if (s.wardCostExtend > 0) uses.push(`<li><b>Extend a goal</b> (${s.wardCostExtend}): the clock button under a goal adds ${s.extendBonus} ${s.clock === 'time' ? 'seconds' : 'turns'} to it.</li>`);
+    if (s.wardCostRefresh > 0) uses.push(`<li><b>Skip the upcoming tiles</b> (${s.wardCostRefresh}): the ⏭ button next to "Next" (or R) discards the ${Math.max(1, s.peekCount || 0)} tile${(s.peekCount || 0) === 1 ? '' : 's'} shown as coming up, so fresh ones follow. Handy for dodging a curse you can see coming.</li>`);
     if (s.wardCostRetreat > 0) uses.push(`<li><b>Push a wall back</b> (${s.wardCostRetreat}): tap the goal on a wall that has moved in, then "Push wall back". The reopened row or column comes back empty.</li>`);
     return `<h3>Wards</h3><p>You earn ${s.wardsPerClear} ward${s.wardsPerClear === 1 ? '' : 's'} per goal cleared${s.perkExtraWard ? ', plus one extra for clearing two or more goals at once' : ''}. Wards bank until you spend them (cost in wards):</p><ul>${uses.join('') || '<li>No ward uses are enabled in Settings.</li>'}</ul>`;
   }
@@ -1183,7 +1223,7 @@ export class UI {
     lines.push(`Clearing 2+ goals with one card multiplies the points by ${s.multiMult} per extra goal${perks.length ? ' and grants ' + perks.join(', ') : ''}.`);
     if (s.comboEnabled) lines.push(`Consecutive clearing placements build a combo worth +${Math.round(s.comboBonus * 100)}% per step.`);
     if (s.placementSeconds > 0 && t) lines.push(`You have ${s.placementSeconds}s to place each card, or it is ${s.placementTimeout === 'random' ? 'placed at random' : 'discarded'}.`);
-    if (s.undoLimit > 0) lines.push(`Undo: ${s.undoLimit} per game${s.undoWardCost > 0 ? `, ${s.undoWardCost} ward${s.undoWardCost === 1 ? '' : 's'} each` : ''}; it rewinds the clock and the draw as well.`);
+    if (s.undoLimit > 0) lines.push(`Undo: ${s.undoLimit >= UNDO_UNLIMITED ? 'unlimited' : s.undoLimit + ' per game'}${s.undoWardCost > 0 ? `, ${s.undoWardCost} ward${s.undoWardCost === 1 ? '' : 's'} each` : ''}; it rewinds the clock and the draw as well.`);
     if (s.mode === 'survival') lines.push(`Survival: outlast ${t ? s.levelSeconds + ' seconds' : s.levelTurns + ' placements'} to finish a level (+${t ? s.levelSecondsGrowth + 's' : s.levelTurnsGrowth + ' turns'} each level). Each new level adds ${s.levelCurseGrowth} curse${s.levelCurseGrowth === 1 ? '' : 's'} and multiplies goal timers by ${s.levelPressureGrowth}.`);
     else lines.push('Endless: score as much as you can before the walls win.');
     return lines;
@@ -1243,7 +1283,7 @@ export class UI {
     if (it.type === 'range') {
       inp = h('input', { type: 'range', id, min: it.min, max: it.max, step: it.step });
       val = h('span', { class: 'val' });
-      inp.addEventListener('input', () => { this.draft[it.key] = parseFloat(inp.value); val.textContent = inp.value; this.afterDraftChange(it.key); });
+      inp.addEventListener('input', () => { this.draft[it.key] = parseFloat(inp.value); val.textContent = it.format ? it.format(parseFloat(inp.value)) : inp.value; this.afterDraftChange(it.key); });
       ctl.append(inp, val);
     } else if (it.type === 'bool') {
       inp = h('input', { type: 'checkbox', id });
@@ -1352,7 +1392,7 @@ export class UI {
       const v = this.draft[it.key];
       if (it.type === 'bool') ref.inp.checked = !!v;
       else ref.inp.value = String(v);
-      if (ref.val) ref.val.textContent = String(v);
+      if (ref.val) ref.val.textContent = it.format ? it.format(v) : String(v);
     }
     for (const d of GOAL_DEFS) {
       const gi = this.goalInputs[d.id];

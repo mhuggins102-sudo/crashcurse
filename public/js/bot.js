@@ -69,6 +69,7 @@ export function botStep(game, rng) {
   if (game.status === 'levelup') { game.continueLevel(); return true; }
   if (game.status !== 'playing') return false;
   if (game.s.wardSpend === 'manual' && game.wards > 0) {
+    if (game.canAffordWard('refresh') && game.upcoming(game.s.peekCount).some((c) => c.kind === 'curse')) game.wardRefresh();
     const curses = game.curseCells();
     if (game.canAffordWard('curse') && curses.length) game.spendWard(rng.pick(curses));
     else if (game.canAffordWard('retreat') && game.emptyCells().length < 4) {

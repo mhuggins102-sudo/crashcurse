@@ -63,6 +63,11 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .tray-current { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .current { display: flex; align-items: center; justify-content: center; }
 .tray-next { display: flex; flex-direction: column; gap: 4px; }
+.lbl-row { display: flex; align-items: center; gap: 6px; }
+.mini-btn { width: 24px; height: 20px; padding: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); border: 1px solid var(--line); color: var(--text); }
+.mini-btn svg { width: 13px; height: 13px; }
+.mini-btn:disabled { opacity: .35; cursor: not-allowed; }
+.mini-btn[hidden] { display: none; }
 .upcoming { display: flex; gap: 6px; min-height: 40px; align-items: center; }
 .tray-chips { display: flex; flex-wrap: wrap; gap: 6px; align-content: center; cursor: pointer; flex: 1; min-width: 120px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1; }
@@ -217,51 +222,51 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
 .wall-left { left: 0; width: calc(var(--wall-lr) + var(--il) * var(--cell)); box-shadow: inset -3px 0 0 var(--left), 4px 0 14px rgba(0,0,0,.55); }
 .wall-right { right: 0; width: calc(var(--wall-lr) + var(--ir) * var(--cell)); box-shadow: inset 3px 0 0 var(--right), -4px 0 14px rgba(0,0,0,.55); }
 .wall.hit { animation: wallHit .5s; }
-.wall.cleared .goal { animation: goalClear .6s; }
-.wall.expired .goal { animation: goalExpire .6s; }
 
 .goal {
-  position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: absolute; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; gap: 3px; padding: 5px 8px; border-radius: 12px; cursor: pointer;
-  background: rgba(8, 11, 17, .55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
+  background: rgba(8, 11, 17, .62); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 4px 14px rgba(0,0,0,.35);
 }
-.wall-top .goal, .wall-bottom .goal {
-  height: calc(var(--wall-tb) - 9px);
-  left: calc(var(--wall-lr) + (var(--il) + (var(--cols) - var(--il) - var(--ir)) / 2) * var(--cell));
-  transform: translateX(-50%);
-  width: max(250px, calc((var(--cols) - var(--il) - var(--ir)) * var(--cell)));
-  transition: left .5s cubic-bezier(.2,.9,.3,1), width .5s cubic-bezier(.2,.9,.3,1);
+/* The cards keep a constant size at the arena's edges; the stone thickens toward the grid beneath them. */
+.goal-top, .goal-bottom {
+  left: 50%; transform: translateX(-50%);
+  width: max(260px, calc(var(--cols) * var(--cell)));
+  height: calc(var(--wall-tb) - 12px);
 }
-.wall-top .goal { bottom: 6px; }
-.wall-bottom .goal { top: 6px; }
-.wall-left .goal, .wall-right .goal {
-  width: calc(var(--wall-lr) - 9px); top: 50%; transform: translateY(-50%); height: max(150px, 100%); padding: 6px 5px;
+.goal-top { top: 6px; }
+.goal-bottom { bottom: 6px; }
+.goal-left, .goal-right {
+  top: var(--wall-tb); height: calc(var(--rows) * var(--cell));
+  width: calc(var(--wall-lr) - 12px); padding: 6px 5px;
 }
-.wall-left .goal { right: 6px; }
-.wall-right .goal { left: 6px; }
+.goal-left { left: 6px; }
+.goal-right { right: 6px; }
+.goal.cleared { animation: goalClear .6s; }
+.goal.expired { animation: goalExpire .6s; }
 .goal-side { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 .goal-name { font-weight: 800; font-size: 16px; line-height: 1.1; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px; }
-.wall-left .goal-name, .wall-right .goal-name { font-size: 13.5px; flex-direction: column; gap: 3px; }
-.wall-top .goal-name { color: var(--top); }
-.wall-right .goal-name { color: var(--right); }
-.wall-bottom .goal-name { color: var(--bottom); }
-.wall-left .goal-name { color: var(--left); }
+.goal-left .goal-name, .goal-right .goal-name { font-size: 13.5px; flex-direction: column; gap: 3px; }
+.goal-top .goal-name { color: var(--top); }
+.goal-right .goal-name { color: var(--right); }
+.goal-bottom .goal-name { color: var(--bottom); }
+.goal-left .goal-name { color: var(--left); }
 .goal-desc { font-size: 11px; color: #c9cfdb; line-height: 1.25; }
-.wall-left .goal-desc, .wall-right .goal-desc { font-size: 10.5px; }
+.goal-left .goal-desc, .goal-right .goal-desc { font-size: 10.5px; }
 .goal-meta { display: flex; gap: 10px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .goal-meta .pts { color: var(--accent); font-weight: 700; }
 .goal-bar { width: 100%; height: 5px; background: rgba(0,0,0,.45); border-radius: 3px; overflow: hidden; }
 .goal-bar-fill { height: 100%; width: 100%; border-radius: 3px; transition: width .2s linear; }
-.wall-top .goal-bar-fill { background: var(--top); }
-.wall-right .goal-bar-fill { background: var(--right); }
-.wall-bottom .goal-bar-fill { background: var(--bottom); }
-.wall-left .goal-bar-fill { background: var(--left); }
+.goal-top .goal-bar-fill { background: var(--top); }
+.goal-right .goal-bar-fill { background: var(--right); }
+.goal-bottom .goal-bar-fill { background: var(--bottom); }
+.goal-left .goal-bar-fill { background: var(--left); }
 .goal.danger .goal-bar-fill { background: var(--bad) !important; }
 .goal.danger { animation: danger .7s infinite alternate; }
 .goal.none { opacity: .6; }
 .arena.narrow .goal-desc { display: none; }
 .arena.narrow .goal-name { font-size: 12.5px; }
-.arena.narrow .wall-left .goal-name, .arena.narrow .wall-right .goal-name { font-size: 11.5px; overflow-wrap: anywhere; }
+.arena.narrow .goal-left .goal-name, .arena.narrow .goal-right .goal-name { font-size: 11.5px; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
 .arena.narrow .goal { padding: 4px 4px; gap: 2px; }
 .arena.narrow .goal-side { display: none; }
 
@@ -286,7 +291,7 @@ button.on { background: #24352a; border-color: var(--good); color: var(--good); 
   font-size: 12px; font-weight: 800; line-height: 1.3; color: inherit; white-space: nowrap;
 }
 .goal-badge svg { width: 14px; height: 14px; flex: 0 0 auto; }
-.wall-left .goal-badge, .wall-right .goal-badge { margin-right: 0; }
+.goal-left .goal-badge, .goal-right .goal-badge { margin-right: 0; }
 .goal-pop-name .goal-badge { color: var(--text); margin-left: 4px; }
 .fam-tag { display: inline-block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; font-weight: 600; }
 table.goals td.shape .goal-badge { margin: 0; }
@@ -300,7 +305,7 @@ table.goals td.fam .fam-tag { margin: 0 4px 0 0; }
 .flag { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 5px; background: rgba(0,0,0,.38); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); color: var(--text); }
 .flag svg { width: 12px; height: 12px; }
 .flag.off { opacity: .55; }
-.wall-left .goal-flags, .wall-right .goal-flags { margin-right: 0; }
+.goal-left .goal-flags, .goal-right .goal-flags { margin-right: 0; }
 .arena.narrow .flag { width: 15px; height: 15px; }
 .arena.narrow .flag svg { width: 11px; height: 11px; }
 
@@ -435,12 +440,12 @@ textarea.json { width: 100%; min-height: 130px; background: var(--panel2); color
 @keyframes ghostPoof { to { transform: scale(1.6); opacity: 0; filter: blur(3px); } }
 @keyframes popUp { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -170%) scale(1); } }
 @keyframes wallHit { 0% { filter: brightness(1.8); } 100% { filter: none; } }
-@keyframes goalClear { 0% { background: rgba(126,212,145,.45); transform: translateX(-50%) scale(1.06); } 100% { background: rgba(8,11,17,.55); } }
-@keyframes goalExpire { 0% { background: rgba(255,107,107,.45); } 100% { background: rgba(8,11,17,.55); } }
-@keyframes danger { from { background: rgba(8,11,17,.55); } to { background: rgba(255,107,107,.22); } }
+@keyframes goalClear { 0% { background: rgba(126,212,145,.45); transform: translateX(-50%) scale(1.06); } 100% { background: rgba(8,11,17,.62); transform: translateX(-50%); } }
+@keyframes goalExpire { 0% { background: rgba(255,107,107,.45); } 100% { background: rgba(8,11,17,.62); } }
+@keyframes danger { from { background: rgba(8,11,17,.62); } to { background: rgba(255,107,107,.22); } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.wall-left.cleared .goal, .wall-right.cleared .goal { animation-name: goalClearSide; }
-@keyframes goalClearSide { 0% { background: rgba(126,212,145,.45); } 100% { background: rgba(8,11,17,.55); } }
+.goal-left.cleared, .goal-right.cleared { animation-name: goalClearSide; }
+@keyframes goalClearSide { 0% { background: rgba(126,212,145,.45); } 100% { background: rgba(8,11,17,.62); } }
 
 /* ---------- narrow (phone) layout: one screen, no scrolling ---------- */
 body.narrow .layout { flex-direction: column; gap: 6px; padding: 6px 8px 0; }

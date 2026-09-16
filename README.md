@@ -79,7 +79,8 @@ On a phone the whole game fits on one screen: the board in the middle, the drawn
 - Click an empty cell to place the drawn card (hover previews it).
 - Click a glowing curse to remove it with a ward.
 - Arrow keys move a cursor; Enter/Space acts on it.
-- `U` (or `Ctrl`+`Z`) undoes the last placement or ward use, clock and draw included; the number of undos per game and an optional ward cost are settings.
+- `U` (or `Ctrl`+`Z`) undoes the last placement or ward use, clock and draw included; undo is unlimited by default, with a per-game slider and an optional ward cost in Settings.
+- `R` (or the ⏭ button by "Next") spends a ward to skip the upcoming tiles shown in the tray.
 - `P` pause, `N` new game, `H` hints (highlights cells that would clear a goal), `B` bot autoplay, `Esc` close/pause.
 
 ## How the rules fit together
@@ -91,7 +92,7 @@ On a phone the whole game fits on one screen: the board in the middle, the drawn
 | Chains | snake paths (bends, no branching); for cards, straights and flushes are 4 long | Placement & clearing |
 | Clearing | the placed card must be part of the goal; cleared cards leave the board | Placement & clearing |
 | Walls | turn clock: each wall's goal lasts 15 placements; expiry moves that wall in; timers shrink 10 % per 20 placements; right after a crush, goals the board already satisfies clear | Walls & timing |
-| Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal (keeps its time plus a bonus by default), or extending a goal by a few turns; pushing a wall back is available but off by default; every use has its own cost | Wards |
+| Wards | one per clear (plus one for a multi-clear); spend on removing a curse, replacing a goal (keeps its time plus a bonus by default), extending a goal by a few turns, or skipping the upcoming tiles; pushing a wall back is available but off by default; every use has its own cost | Wards |
 | Multi-clear | ×2 points per extra goal, +1 ward, 1 curse purged from the deck | Multi-clear perks |
 | Scoring | per-goal base points, combo +25 % per consecutive clearing placement | Scoring, Goal pool |
 | Mode | endless; survival mode adds level timers, extra curses and faster timers per level | Mode & levels |

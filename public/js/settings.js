@@ -110,13 +110,16 @@ export const SETTINGS_SCHEMA = [
         options: [['keep', 'Keeps the remaining time'], ['add', 'Keeps the remaining time plus a bonus'], ['reset', 'Starts with a fresh timer']] },
       { key: 'rerollBonus', label: 'Bonus added to a replaced goal (turns or seconds)', type: 'range', min: 1, max: 30, step: 1, def: 5 },
       { key: 'wardCostExtend', label: 'Ward cost: extend the current goal (0 = not allowed)', type: 'range', min: 0, max: 3, step: 1, def: 1 },
+      { key: 'wardCostRefresh', label: 'Ward cost: skip the upcoming tiles (0 = not allowed)', type: 'range', min: 0, max: 3, step: 1, def: 1,
+        help: 'Discards the tiles shown as "next" so fresh ones come up. A visible curse can be dodged this way (it returns via the discard pile if curses return).' },
       { key: 'extendBonus', label: 'Time added by an extension (turns or seconds)', type: 'range', min: 1, max: 30, step: 1, def: 5 },
     ],
   },
   {
     group: 'Undo',
     items: [
-      { key: 'undoLimit', label: 'Undos per game (0 = off)', type: 'range', min: 0, max: 25, step: 1, def: 5,
+      { key: 'undoLimit', label: 'Undos per game (0 = off, far right = unlimited)', type: 'range', min: 0, max: 50, step: 1, def: 50,
+        format: (v) => (v >= 50 ? '∞' : String(v)),
         help: 'Undo rewinds the last placement or ward use, including the clock and the luck of the draw.' },
       { key: 'undoWardCost', label: 'Ward cost per undo', type: 'range', min: 0, max: 3, step: 1, def: 0 },
     ],
@@ -264,3 +267,5 @@ export function settingsToJSON(s) {
 export function settingsFromJSON(text) {
   return normalizeSettings(JSON.parse(text));
 }
+
+export const UNDO_UNLIMITED = 50;
